@@ -7,6 +7,7 @@
   var BLOCKED = "Your partner will not see this until it is a phrase from the list, or one of the helped lines.";
   var FREE = "Now write your own message in Italian.";
   var NO_PARTNER = "No partner is connected, so this stayed here. Use Try both sides, or a 4-letter room code.";
+  var WAITING = "Waiting for your partner.";
 
   var SWAPS = [
     { label: "hello -> Ciao!", keys: ["hello"], it: "Ciao!" },
@@ -28,6 +29,8 @@
     conversations: [],
     convo: null,
     level: "1",
+    step: 0,
+    role: null,
     both: false,
     peer: null,
     conn: null,
@@ -43,6 +46,13 @@
       .replace(/[\u0300-\u036f]/g, "")
       .toLowerCase()
       .replace(/[\u2019\u2018`]/g, "'")
+      .replace(/\s+/g, " ")
+      .trim();
+  }
+
+  function matchKey(s) {
+    return foldIt(s)
+      .replace(/[^a-z0-9' ]+/g, " ")
       .replace(/\s+/g, " ")
       .trim();
   }
@@ -88,15 +98,16 @@
     });
     SWAPS.forEach(function (swap) { phrases.push(swap.it); });
     phrases.forEach(function (phrase) {
-      var key = foldIt(phrase);
-      if (!map[key]) map[key] = phrase;
+      var key = matchKey(phrase);
+      if (key && !map[key]) map[key] = phrase;
     });
     state.phraseMap = map;
   }
 
   function canonical(text) {
     if (!state.phraseMap) return null;
-    return state.phraseMap[foldIt(text)] || null;
+    var key = matchKey(text);
+    return key ? state.phraseMap[key] || null : null;
   }
 
   function matchSwap(text) {
@@ -175,6 +186,7 @@
       "#italian-guided-chat .bubble .why { display:block; margin-top:6px; font-size:12px; font-weight:650; color:#ffd7a8; }",
       "#italian-guided-chat .prompt { padding:4px 12px 0; font-size:14px; color:#fff; line-height:1.35; }",
       "#italian-guided-chat .prompt .step { color:#8e8e93; }",
+      "#italian-guided-chat .prompt .waiting { color:#ffd60a; font-weight:650; }",
       "#italian-guided-chat .chips { display:flex; flex-wrap:wrap; gap:6px; padding:8px 12px; max-height:132px; overflow:auto; }",
       "#italian-guided-chat .chips button, #italian-guided-chat .swap button { min-height:40px; border-radius:999px; border:1px solid #3a3a3c; background:#2c2c2e; color:#fff; font-weight:650; padding:8px 12px; cursor:pointer; }",
       "#italian-guided-chat .help { margin:0 12px 8px; background:#3a2424; color:#ffd7d4; border-radius:12px; padding:8px 10px; max-height:150px; overflow:auto; font-size:14px; }",
@@ -237,9 +249,28 @@
     scrollThread(student);
   }
 
+  function shared() {
+    return state.both || !!(state.conn && state.conn.open);
+  }
+
+  function stepOf(student) {
+    return shared() ? state.step : student.step;
+  }
+
+  function hasTurn(student) {
+    if (!shared()) return true;
+    var steps = state.convo.steps || [];
+    if (state.step >= steps.length) return true;
+    var firstSpeaker = state.step % 2 === 0;
+    if (state.both) return firstSpeaker ? student.id === "A" : student.id === "B";
+    if (student.id !== "A") return false;
+    return firstSpeaker === (state.role === "host");
+  }
+
   function chipsFor(student) {
     var steps = state.convo.steps || [];
-    if (student.step >= steps.length) {
+    var step = stepOf(student);
+    if (step >= steps.length) {
       var seen = Object.create(null);
       var all = [];
       steps.forEach(function (step) {
@@ -252,18 +283,25 @@
       });
       return all;
     }
-    return steps[student.step].chips || [];
+    if (!hasTurn(student)) return [];
+    return steps[step].chips || [];
   }
 
   function renderChrome(student) {
     var steps = state.convo.steps || [];
     var prompt = student.root.querySelector("[data-role='prompt']");
     prompt.textContent = "";
-    if (student.step >= steps.length) {
+    var step = stepOf(student);
+    var turn = hasTurn(student);
+    student.root.setAttribute("data-turn", turn ? "yes" : "no");
+    if (step >= steps.length) {
       prompt.appendChild(el("span", { "data-role": "prompt-text", text: FREE }));
+    } else if (!turn) {
+      prompt.appendChild(el("span", { class: "step", text: "Step " + (step + 1) + " of " + steps.length + ". " }));
+      prompt.appendChild(el("span", { "data-role": "prompt-text", class: "waiting", text: WAITING }));
     } else {
-      prompt.appendChild(el("span", { class: "step", text: "Step " + (student.step + 1) + " of " + steps.length + ". " }));
-      prompt.appendChild(el("span", { "data-role": "prompt-text", text: steps[student.step].prompt }));
+      prompt.appendChild(el("span", { class: "step", text: "Step " + (step + 1) + " of " + steps.length + ". " }));
+      prompt.appendChild(el("span", { "data-role": "prompt-text", text: steps[step].prompt }));
     }
     var box = student.root.querySelector("[data-role='chips']");
     box.textContent = "";
@@ -282,7 +320,7 @@
   }
 
   function canCross() {
-    return state.both || !!(state.conn && state.conn.open);
+    return shared();
   }
 
   function cross(fromId, canon) {
@@ -292,11 +330,26 @@
     }
     if (state.conn && state.conn.open) {
       try {
-        state.conn.send({ t: "line", text: canon });
+        state.conn.send({ t: "line", text: canon, step: state.step });
       } catch (err) {
         setPeerStatus("The message did not go through. The connection failed. Use Try both sides on this computer.");
       }
     }
+  }
+
+  function maybeAdvanceShared(student, canon) {
+    var steps = state.convo.steps || [];
+    if (state.step >= steps.length || !hasTurn(student)) return;
+    var chips = steps[state.step].chips || [];
+    if (chips.indexOf(canon) !== -1) state.step += 1;
+  }
+
+  function resetConversation() {
+    state.step = 0;
+    ["A", "B"].forEach(function (id) {
+      if (state.students[id]) clearThread(state.students[id]);
+    });
+    renderAll();
   }
 
   function maybeAdvance(student, canon) {
@@ -348,12 +401,14 @@
       hideHelp(student);
       if (canCross()) {
         addBubble(student.id, canon, "me", null);
+        maybeAdvanceShared(student, canon);
         cross(student.id, canon);
+        renderAll();
       } else {
         addBubble(student.id, canon, "me", NO_PARTNER);
+        maybeAdvance(student, canon);
+        renderChrome(student);
       }
-      maybeAdvance(student, canon);
-      renderChrome(student);
       return;
     }
     var swap = matchSwap(text);
@@ -373,6 +428,7 @@
     if (!list.length) return;
     state.level = String(level);
     state.convo = list[0];
+    state.step = 0;
     state.phraseMap = null;
     rebuildMap();
     var mount = document.getElementById("italian-guided-chat");
@@ -389,7 +445,7 @@
     }
   }
 
-  function setConversation(id) {
+  function setConversation(id, fromRemote) {
     var found = null;
     state.conversations.forEach(function (c) {
       if (c.id === id) found = c;
@@ -397,6 +453,7 @@
     if (!found) return;
     state.level = String(found.level);
     state.convo = found;
+    state.step = 0;
     state.phraseMap = null;
     rebuildMap();
     var mount = document.getElementById("italian-guided-chat");
@@ -404,7 +461,11 @@
     ["A", "B"].forEach(function (sid) {
       if (state.students[sid]) clearThread(state.students[sid]);
     });
+    fillConversationSelect();
     renderAll();
+    if (!fromRemote && state.conn && state.conn.open && !state.both) {
+      try { state.conn.send({ t: "convo", id: found.id }); } catch (err) {}
+    }
   }
 
   function fillConversationSelect() {
@@ -453,6 +514,15 @@
       var clean = canonical(data.text);
       if (!clean) return;
       addBubble("A", clean, "them", null);
+      var total = (state.convo.steps || []).length;
+      if (typeof data.step === "number" && data.step % 1 === 0 && data.step >= 0 && data.step <= total) {
+        state.step = data.step;
+      }
+      renderAll();
+      return;
+    }
+    if (data.t === "convo" && data.id && (!state.convo || data.id !== state.convo.id)) {
+      setConversation(String(data.id), true);
       return;
     }
     if (data.t === "level" && data.level && String(data.level) !== state.level) {
@@ -465,8 +535,12 @@
     conn.on("open", function () {
       clearPeerTimer();
       setPeerStatus("Connected. Your partner only sees Italian that passed the check.");
+      resetConversation();
       if (isHost) {
-        try { conn.send({ t: "level", level: state.level }); } catch (err) {}
+        try {
+          conn.send({ t: "level", level: state.level });
+          if (state.convo) conn.send({ t: "convo", id: state.convo.id });
+        } catch (err) {}
       }
     });
     conn.on("data", onRemote);
@@ -477,6 +551,7 @@
     conn.on("close", function () {
       if (state.conn === conn) state.conn = null;
       setPeerStatus("The partner disconnected. Try both sides still works on this computer.");
+      renderAll();
     });
   }
 
@@ -501,6 +576,7 @@
   function createRoom() {
     if (typeof Peer !== "function") return peerMissing();
     stopPeer();
+    state.role = "host";
     var letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
     var code = "";
     for (var i = 0; i < 4; i++) code += letters.charAt(Math.floor(Math.random() * letters.length));
@@ -532,6 +608,7 @@
     }
     if (typeof Peer !== "function") return peerMissing();
     stopPeer();
+    state.role = "guest";
     showCode(code);
     armTimer();
     try {
@@ -574,6 +651,7 @@
       button.setAttribute("aria-pressed", "false");
       button.textContent = "Try both sides";
     }
+    resetConversation();
   }
 
   function makeStudent(id, name) {
