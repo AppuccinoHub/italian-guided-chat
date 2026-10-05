@@ -1,0 +1,188 @@
+{
+  "conversations": [
+    {
+      "id": "greet",
+      "level": "1",
+      "title": "Say hello",
+      "steps": [
+        {
+          "prompt": "Say hi.",
+          "chips": [
+            "Ciao!",
+            "Buongiorno!",
+            "Salve!"
+          ]
+        },
+        {
+          "prompt": "Ask how they are.",
+          "chips": [
+            "Come stai?",
+            "Come va?"
+          ]
+        },
+        {
+          "prompt": "Answer.",
+          "chips": [
+            "Sto bene, grazie.",
+            "Bene, e tu?",
+            "Così così."
+          ]
+        },
+        {
+          "prompt": "Say goodbye.",
+          "chips": [
+            "Ciao!",
+            "A dopo!",
+            "A domani!"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "hungry",
+      "level": "2",
+      "title": "Are you hungry?",
+      "steps": [
+        {
+          "prompt": "Ask if they are hungry.",
+          "chips": [
+            "Hai fame?"
+          ]
+        },
+        {
+          "prompt": "Answer.",
+          "chips": [
+            "Sì, ho fame.",
+            "No, non ho fame.",
+            "Ho un po' di fame."
+          ]
+        },
+        {
+          "prompt": "Ask about thirst.",
+          "chips": [
+            "Hai sete?"
+          ]
+        },
+        {
+          "prompt": "Answer.",
+          "chips": [
+            "Sì, ho sete.",
+            "No, non ho sete."
+          ]
+        },
+        {
+          "prompt": "Suggest something.",
+          "chips": [
+            "Andiamo a mangiare?",
+            "Prendiamo un caffè?"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "weekend",
+      "level": "3",
+      "title": "Weekend plans",
+      "steps": [
+        {
+          "prompt": "Ask about the weekend.",
+          "chips": [
+            "Che cosa fai questo fine settimana?"
+          ]
+        },
+        {
+          "prompt": "Answer.",
+          "chips": [
+            "Vado al mare.",
+            "Resto a casa.",
+            "Esco con gli amici."
+          ]
+        },
+        {
+          "prompt": "Ask a follow-up.",
+          "chips": [
+            "Con chi vai?",
+            "A che ora?"
+          ]
+        },
+        {
+          "prompt": "Invite them.",
+          "chips": [
+            "Vuoi venire con me?",
+            "Ci vediamo sabato?"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "opinion",
+      "level": "4",
+      "title": "Give an opinion",
+      "steps": [
+        {
+          "prompt": "Ask what they think.",
+          "chips": [
+            "Che cosa ne pensi?",
+            "Ti piace?"
+          ]
+        },
+        {
+          "prompt": "Give your opinion.",
+          "chips": [
+            "Secondo me è interessante.",
+            "Secondo me è noioso.",
+            "Mi piace molto."
+          ]
+        },
+        {
+          "prompt": "Ask why.",
+          "chips": [
+            "Perché?",
+            "Come mai?"
+          ]
+        },
+        {
+          "prompt": "Give a reason.",
+          "chips": [
+            "Perché è divertente.",
+            "Perché non ho tempo."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "agree",
+      "level": "AP",
+      "title": "Agree or disagree",
+      "steps": [
+        {
+          "prompt": "State your view.",
+          "chips": [
+            "Sono d'accordo.",
+            "Non sono d'accordo."
+          ]
+        },
+        {
+          "prompt": "Add a reason.",
+          "chips": [
+            "Perché è importante.",
+            "Perché non è realistico."
+          ]
+        },
+        {
+          "prompt": "Ask them.",
+          "chips": [
+            "E tu che cosa ne pensi?"
+          ]
+        },
+        {
+          "prompt": "Acknowledge them.",
+          "chips": [
+            "Capisco il tuo punto di vista.",
+            "Hai ragione su questo."
+          ]
+        }
+      ]
+    }
+  ]
+}
