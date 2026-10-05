@@ -3,8 +3,8 @@
   var script = document.currentScript;
   var base = new URL("./", script && script.src ? script.src : location.href);
 
-  var NOTE = "Your partner only sees the corrected Italian. They never see your mistakes.";
-  var BLOCKED = "Your partner will not see this until it is a phrase from the list, or one of the helped lines.";
+  var NOTE = "Your partner only sees Italian. English and practice mistakes stay on your screen.";
+  var BLOCKED = "That does not look like Italian yet. Try a phrase chip, or write a real Italian sentence.";
   var FREE = "Now write your own message in Italian.";
   var NO_PARTNER = "No partner is connected, so this stayed here. Use Try both sides, or a 4-letter room code.";
   var WAITING = "Waiting for your partner.";
@@ -19,9 +19,9 @@
     { label: "I do not know -> Non lo so.", keys: ["i do not know"], it: "Non lo so." }
   ];
 
-  var EN = Object.create(null);
-  ("a about am an and are as at be because been but by can come did do does dont don't goodbye good have hello hey hi how hungry i i'm im in is it its it's just know like me my no not of oh ok okay on or please really so sorry thank thanks that the them then there they this thirsty to too want was we what when where who why with yes you your food water coffee today tomorrow morning night very think feel tired cold hot sleep home house friend friends going get go").split(/\s+/).forEach(function (w) {
-    EN[w] = true;
+  var EN_FUNC = Object.create(null);
+  ("i am is are you the a an my your we they have has do does did what where when how why yes no thanks please want need like hungry thirsty today tomorrow weekend").split(/\s+/).forEach(function (w) {
+    EN_FUNC[w] = true;
   });
 
   var LEVEL_ORDER = ["1", "2", "3", "4", "AP"];
@@ -121,11 +121,25 @@
   function isEnglish(text) {
     if (matchSwap(text)) return true;
     var words = wordTokens(text);
-    if (!words.length) return false;
     for (var i = 0; i < words.length; i++) {
-      if (EN[words[i]] && !state.italian[words[i]]) return true;
+      if (EN_FUNC[words[i]]) return true;
     }
-    return words.every(function (w) { return !!EN[w]; });
+    return false;
+  }
+
+  function isGibberish(text) {
+    if (/[\u00C0-\u024F]/.test(String(text || ""))) return false;
+    var words = wordTokens(text);
+    if (!words.length) return true;
+    for (var i = 0; i < words.length; i++) {
+      var w = words[i];
+      if (state.italian[w]) return false;
+      if (w.length < 2) continue;
+      if (!/[aeiou]/.test(w) || !/[bcdfghjklmnpqrstvwxyz]/.test(w)) continue;
+      if (/^[qwertyuiop]+$/.test(w) || /^[asdfghjkl]+$/.test(w) || /^[zxcvbnm]+$/.test(w)) continue;
+      return false;
+    }
+    return true;
   }
 
   function el(tag, attrs) {
@@ -148,56 +162,66 @@
     var style = document.createElement("style");
     style.id = "guided-chat-css";
     style.textContent = [
-      "html.guided-fill, html.guided-fill body { height:100%; margin:0; overflow:hidden; background:#121216; }",
+      "html.guided-fill, html.guided-fill body { height:100%; margin:0; overflow:hidden; background:#FFE9C9; }",
       "html.guided-fill #italian-guided-chat { height:100%; min-height:0; }",
-      "#italian-guided-chat { box-sizing:border-box; min-height:640px; height:100%; display:flex; flex-direction:column; background:#121216; color:#fff; font-family:system-ui,-apple-system,'Segoe UI',sans-serif; }",
+      "#italian-guided-chat { box-sizing:border-box; min-height:640px; height:100%; display:flex; flex-direction:column; background:#FFE9C9; color:#0E2A5B; font-family:system-ui,-apple-system,'Segoe UI',Roboto,Arial,sans-serif; }",
       "#italian-guided-chat * { box-sizing:border-box; }",
       "#italian-guided-chat button, #italian-guided-chat input, #italian-guided-chat select { font:inherit; color:inherit; }",
-      "#italian-guided-chat .toolbar { display:flex; flex-wrap:wrap; gap:8px; align-items:center; padding:8px 10px; background:#1c1c1e; }",
-      "#italian-guided-chat .toolbar label { display:flex; align-items:center; gap:6px; font-size:14px; color:#d0d0d4; }",
+      "#italian-guided-chat .toolbar { display:flex; flex-wrap:wrap; gap:8px; align-items:center; padding:10px 12px; background:#fff; border-bottom:3px solid #BFE3EA; }",
+      "#italian-guided-chat .toolbar label { display:flex; align-items:center; gap:6px; font-size:14px; font-weight:700; color:#4F5E80; }",
       "#italian-guided-chat .toolbar label[hidden] { display:none !important; }",
-      "#italian-guided-chat .toolbar select { min-height:40px; background:#2c2c2e; border:1px solid #3a3a3c; border-radius:10px; padding:6px 8px; }",
-      "#italian-guided-chat .toolbar button { min-height:40px; background:#2c2c2e; border:1px solid #3a3a3c; border-radius:10px; padding:8px 12px; cursor:pointer; }",
-      "#italian-guided-chat .toolbar button[aria-pressed='true'] { background:#0a84ff; border-color:#0a84ff; }",
-      "#italian-guided-chat .room { padding:8px 12px 12px; background:#1c1c1e; display:flex; flex-wrap:wrap; gap:8px; align-items:center; }",
+      "#italian-guided-chat .toolbar select { min-height:40px; background:#fff; border:3px solid #BFE3EA; border-radius:14px; padding:6px 10px; color:#0E2A5B; font-weight:800; }",
+      "#italian-guided-chat .toolbar button { min-height:40px; background:#fff; border:3px solid #BFE3EA; border-radius:999px; padding:8px 14px; cursor:pointer; color:#0E2A5B; font-weight:800; box-shadow:0 3px 0 #BFE3EA; }",
+      "#italian-guided-chat .toolbar button:active { transform:translateY(2px); box-shadow:0 1px 0 #BFE3EA; }",
+      "#italian-guided-chat .toolbar button[aria-pressed='true'] { background:#1A5CDF; border-color:#1A5CDF; color:#fff; box-shadow:0 5px 0 #0E2A5B; }",
+      "#italian-guided-chat .toolbar button[aria-pressed='true']:active { box-shadow:0 2px 0 #0E2A5B; }",
+      "#italian-guided-chat .room { padding:10px 12px 12px; background:#FFF6E8; border-bottom:3px solid #BFE3EA; display:flex; flex-wrap:wrap; gap:8px; align-items:center; }",
       "#italian-guided-chat .room[hidden] { display:none !important; }",
-      "#italian-guided-chat .room input { min-height:40px; width:6.5rem; letter-spacing:.2em; text-transform:uppercase; background:#000; border:1px solid #3a3a3c; border-radius:10px; padding:8px; }",
-      "#italian-guided-chat .room button { min-height:40px; background:#2c2c2e; border:1px solid #3a3a3c; border-radius:10px; padding:8px 12px; cursor:pointer; }",
-      "#italian-guided-chat .code { font-size:28px; font-weight:800; letter-spacing:.18em; min-width:5.2rem; }",
-      "#italian-guided-chat .peer-status { flex:1 1 220px; font-size:14px; color:#d6e6ff; margin:0; }",
+      "#italian-guided-chat .room input { min-height:40px; width:6.5rem; letter-spacing:.2em; text-transform:uppercase; background:#fff; border:3px solid #BFE3EA; border-radius:14px; padding:8px; color:#0E2A5B; font-weight:800; }",
+      "#italian-guided-chat .room input:focus { border-color:#10BFBF; outline:0; }",
+      "#italian-guided-chat .room button { min-height:40px; background:#1A5CDF; border:0; border-radius:999px; padding:8px 14px; cursor:pointer; color:#fff; font-weight:800; box-shadow:0 5px 0 #0E2A5B; }",
+      "#italian-guided-chat .room button:active { transform:translateY(3px); box-shadow:0 2px 0 #0E2A5B; }",
+      "#italian-guided-chat .code { font-size:28px; font-weight:800; letter-spacing:.18em; min-width:5.2rem; color:#0E2A5B; }",
+      "#italian-guided-chat .peer-status { flex:1 1 220px; font-size:14px; color:#4F5E80; font-weight:600; margin:0; }",
       "#italian-guided-chat .stage { flex:1; min-height:0; display:grid; grid-template-columns:1fr; }",
-      "#italian-guided-chat .stage.both { grid-template-columns:1fr 1fr; gap:8px; padding:8px; }",
+      "#italian-guided-chat .stage.both { grid-template-columns:1fr 1fr; gap:10px; padding:10px; }",
       "@media (max-width:800px) { #italian-guided-chat .stage.both { grid-template-columns:1fr; grid-template-rows:1fr 1fr; } }",
-      "#italian-guided-chat .student { height:100%; min-height:0; display:flex; flex-direction:column; background:#000; overflow:hidden; }",
-      "#italian-guided-chat .stage.both .student { border:1px solid #2a2a2e; border-radius:16px; }",
+      "#italian-guided-chat .student { height:100%; min-height:0; display:flex; flex-direction:column; background:#FFF6E8; overflow:hidden; }",
+      "#italian-guided-chat .stage.both .student { border:3px solid #BFE3EA; border-radius:22px; background:#fff; box-shadow:0 2px 0 #BFE3EA; }",
       "#italian-guided-chat .student[hidden] { display:none !important; }",
-      "#italian-guided-chat .who { display:flex; gap:8px; align-items:center; padding:8px 12px 4px; }",
-      "#italian-guided-chat .avatar { width:32px; height:32px; border-radius:50%; display:grid; place-items:center; font-weight:800; background:#0a84ff; }",
-      "#italian-guided-chat .student[data-student='B'] .avatar { background:#30d158; color:#04140a; }",
-      "#italian-guided-chat .who-name { font-weight:700; font-size:15px; }",
-      "#italian-guided-chat .who-title { color:#aeaeb2; font-size:13px; }",
-      "#italian-guided-chat .note { background:#1c2a3a; color:#d6e6ff; padding:8px 12px; font-size:13px; line-height:1.35; }",
-      "#italian-guided-chat .thread { flex:1; min-height:72px; overflow:auto; padding:10px 12px; display:flex; flex-direction:column; gap:8px; }",
-      "#italian-guided-chat .empty { color:#8e8e93; font-size:14px; text-align:center; margin:12px 8px; }",
-      "#italian-guided-chat .bubble { max-width:82%; padding:8px 12px; border-radius:18px; font-size:16px; line-height:1.35; word-break:break-word; }",
-      "#italian-guided-chat .bubble.me { align-self:flex-end; background:#0a84ff; color:#fff; border-bottom-right-radius:5px; }",
-      "#italian-guided-chat .bubble.them { align-self:flex-start; background:#2c2c2e; color:#fff; border-bottom-left-radius:5px; }",
-      "#italian-guided-chat .bubble.pending { align-self:flex-end; background:transparent; color:#ffd60a; border:1.5px dashed #ff9f0a; border-bottom-right-radius:5px; }",
-      "#italian-guided-chat .bubble .why { display:block; margin-top:6px; font-size:12px; font-weight:650; color:#ffd7a8; }",
-      "#italian-guided-chat .prompt { padding:4px 12px 0; font-size:14px; color:#fff; line-height:1.35; }",
-      "#italian-guided-chat .prompt .step { color:#8e8e93; }",
-      "#italian-guided-chat .prompt .waiting { color:#ffd60a; font-weight:650; }",
-      "#italian-guided-chat .chips { display:flex; flex-wrap:wrap; gap:6px; padding:8px 12px; max-height:132px; overflow:auto; }",
-      "#italian-guided-chat .chips button, #italian-guided-chat .swap button { min-height:40px; border-radius:999px; border:1px solid #3a3a3c; background:#2c2c2e; color:#fff; font-weight:650; padding:8px 12px; cursor:pointer; }",
-      "#italian-guided-chat .help { margin:0 12px 8px; background:#3a2424; color:#ffd7d4; border-radius:12px; padding:8px 10px; max-height:150px; overflow:auto; font-size:14px; }",
+      "#italian-guided-chat .who { display:flex; gap:8px; align-items:center; padding:10px 12px 4px; }",
+      "#italian-guided-chat .avatar { width:34px; height:34px; border-radius:50%; display:grid; place-items:center; font-weight:800; background:#1A5CDF; color:#fff; }",
+      "#italian-guided-chat .student[data-student='B'] .avatar { background:#10BFBF; color:#fff; }",
+      "#italian-guided-chat .who-name { font-weight:800; font-size:15px; color:#0E2A5B; }",
+      "#italian-guided-chat .who-title { color:#4F5E80; font-size:13px; font-weight:600; }",
+      "#italian-guided-chat .note { background:#E8F4F7; color:#0E2A5B; padding:8px 12px; font-size:13px; line-height:1.35; font-weight:600; border-top:2px solid #BFE3EA; border-bottom:2px solid #BFE3EA; }",
+      "#italian-guided-chat .thread { flex:1; min-height:72px; overflow:auto; padding:10px 12px; display:flex; flex-direction:column; gap:8px; background:#FFE9C9; }",
+      "#italian-guided-chat .stage.both .thread { background:#FFF6E8; }",
+      "#italian-guided-chat .empty { color:#4F5E80; font-size:14px; text-align:center; margin:12px 8px; font-weight:600; }",
+      "#italian-guided-chat .bubble { max-width:82%; padding:10px 14px; border-radius:18px; font-size:16px; line-height:1.35; word-break:break-word; font-weight:650; }",
+      "#italian-guided-chat .bubble.me { align-self:flex-end; background:#1A5CDF; color:#fff; border-bottom-right-radius:6px; box-shadow:0 3px 0 #0E2A5B; }",
+      "#italian-guided-chat .bubble.them { align-self:flex-start; background:#fff; color:#0E2A5B; border:2px solid #BFE3EA; border-bottom-left-radius:6px; }",
+      "#italian-guided-chat .bubble.pending { align-self:flex-end; background:#fff; color:#0E2A5B; border:2px dashed #F28C28; border-bottom-right-radius:6px; box-shadow:none; }",
+      "#italian-guided-chat .bubble .why { display:block; margin-top:6px; font-size:12px; font-weight:800; color:#F28C28; }",
+      "#italian-guided-chat .prompt { padding:6px 12px 0; font-size:14px; color:#0E2A5B; line-height:1.35; font-weight:700; }",
+      "#italian-guided-chat .prompt .step { color:#4F5E80; }",
+      "#italian-guided-chat .prompt .waiting { color:#F28C28; font-weight:800; }",
+      "#italian-guided-chat .chips { display:flex; flex-wrap:wrap; gap:8px; padding:8px 12px; max-height:140px; overflow:auto; }",
+      "#italian-guided-chat .chips button, #italian-guided-chat .swap button { min-height:40px; border-radius:999px; border:3px solid #BFE3EA; background:#fff; color:#0E2A5B; font-weight:800; padding:8px 14px; cursor:pointer; box-shadow:0 1px 0 #BFE3EA; }",
+      "#italian-guided-chat .chips button:active, #italian-guided-chat .swap button:active { border-color:#10BFBF; background:#E2F7F7; }",
+      "#italian-guided-chat .help { margin:0 12px 8px; background:#FDECEC; color:#B3261E; border:2px solid #F5C2C0; border-radius:14px; padding:8px 10px; max-height:150px; overflow:auto; font-size:14px; }",
       "#italian-guided-chat .help[hidden] { display:none !important; }",
-      "#italian-guided-chat .help-lead { margin:0 0 6px; font-weight:700; }",
-      "#italian-guided-chat .help-label { margin:0 0 4px; color:#ffb4a8; font-size:12px; font-weight:700; }",
-      "#italian-guided-chat .swap { display:flex; align-items:center; gap:6px; margin:4px 0; }",
-      "#italian-guided-chat .swap.match button { outline:2px solid #ffd60a; }",
-      "#italian-guided-chat .composer { display:flex; gap:8px; padding:8px 12px 12px; }",
-      "#italian-guided-chat .composer input { flex:1; min-width:0; border-radius:18px; border:1px solid #3a3a3c; background:#1c1c1e; padding:10px 12px; font-size:16px; }",
-      "#italian-guided-chat .composer button { background:#0a84ff; color:#fff; border:0; border-radius:14px; min-width:72px; min-height:44px; font-weight:700; cursor:pointer; }"
+      "#italian-guided-chat .help-lead { margin:0 0 6px; font-weight:800; }",
+      "#italian-guided-chat .help-label { margin:0 0 4px; color:#B3261E; font-size:12px; font-weight:800; }",
+      "#italian-guided-chat .swap { display:flex; align-items:center; gap:6px; margin:4px 0; color:#0E2A5B; }",
+      "#italian-guided-chat .swap.match button { outline:3px solid #F28C28; outline-offset:2px; }",
+      "#italian-guided-chat .composer { display:flex; gap:8px; padding:8px 12px 12px; background:#fff; border-top:3px solid #BFE3EA; }",
+      "#italian-guided-chat .composer input { flex:1; min-width:0; border-radius:20px; border:3px solid #BFE3EA; background:#fff; padding:10px 14px; font-size:16px; color:#0E2A5B; font-weight:700; }",
+      "#italian-guided-chat .composer input:focus { border-color:#10BFBF; outline:0; }",
+      "#italian-guided-chat .composer input::placeholder { color:#4F5E80; font-weight:600; }",
+      "#italian-guided-chat .composer button { background:#1A5CDF; color:#fff; border:0; border-radius:999px; min-width:72px; min-height:44px; font-weight:800; cursor:pointer; box-shadow:0 5px 0 #0E2A5B; }",
+      "#italian-guided-chat .composer button:active { transform:translateY(3px); box-shadow:0 2px 0 #0E2A5B; }",
+      "#italian-guided-chat button:focus-visible, #italian-guided-chat input:focus-visible, #italian-guided-chat select:focus-visible { outline:4px solid #F28C28; outline-offset:2px; }"
     ].join("\n");
     document.head.appendChild(style);
   }
@@ -393,22 +417,26 @@
     scrollThread(student);
   }
 
+  function deliver(student, line, advanceWith) {
+    hideHelp(student);
+    if (canCross()) {
+      addBubble(student.id, line, "me", null);
+      if (advanceWith) maybeAdvanceShared(student, advanceWith);
+      cross(student.id, line);
+      renderAll();
+    } else {
+      addBubble(student.id, line, "me", NO_PARTNER);
+      if (advanceWith) maybeAdvance(student, advanceWith);
+      renderChrome(student);
+    }
+  }
+
   function attempt(student, raw) {
     var text = String(raw || "").trim();
     if (!text) return;
     var canon = canonical(text);
     if (canon) {
-      hideHelp(student);
-      if (canCross()) {
-        addBubble(student.id, canon, "me", null);
-        maybeAdvanceShared(student, canon);
-        cross(student.id, canon);
-        renderAll();
-      } else {
-        addBubble(student.id, canon, "me", NO_PARTNER);
-        maybeAdvance(student, canon);
-        renderChrome(student);
-      }
+      deliver(student, canon, canon);
       return;
     }
     var swap = matchSwap(text);
@@ -416,7 +444,11 @@
       showEnglishHelp(student, text, swap);
       return;
     }
-    showBlocked(student, text);
+    if (isGibberish(text)) {
+      showBlocked(student, text);
+      return;
+    }
+    deliver(student, text, null);
   }
 
   function convosFor(level) {
@@ -512,8 +544,9 @@
     if (!data || typeof data !== "object" || state.both) return;
     if (data.t === "line") {
       var clean = canonical(data.text);
-      if (!clean) return;
-      addBubble("A", clean, "them", null);
+      var line = clean || String(data.text || "").trim();
+      if (!line || isEnglish(line) || isGibberish(line)) return;
+      addBubble("A", line, "them", null);
       var total = (state.convo.steps || []).length;
       if (typeof data.step === "number" && data.step % 1 === 0 && data.step >= 0 && data.step <= total) {
         state.step = data.step;

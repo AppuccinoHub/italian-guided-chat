@@ -23,6 +23,8 @@ The script loads conversations.json and vendor/peerjs.min.js from the same folde
 
 Use only one chat per page. The div must have the id italian-guided-chat.
 
+Students may type free Italian (not only the chips); English is still blocked and stays on their screen.
+
 ## Adding a conversation
 
 Edit conversations.json in this repo (AppuccinoHub/italian-guided-chat) and push to main. GitHub Pages updates the live site in a minute or two, and every page that uses the snippet gets the new conversation. There is no rebuild.
