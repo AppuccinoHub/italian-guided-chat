@@ -1,3 +1,3 @@
-# //appuccinohub.github.io/italian-guided-chat/:Italian Guided Chat
+# Italian Guided Chat
+**[▶ Play online](https://appuccinohub.github.io/italian-guided-chat/)** — open the live app in your browser.
 
-**[▶ Play online](https)** — open the live app in your browser.
