@@ -11,7 +11,7 @@
   var FREE = "Now write your own message in Italian.";
   var NO_PARTNER = "No partner is connected, so this stayed here. Use Try both sides, or Join class.";
   var WAITING = "Waiting for your partner.";
-  var CLASS_FAIL = "Could not reach the teacher's class. Check the code, stay with your teacher, and tap Join again.";
+  var CLASS_FAIL = "Could not join the class. Ask the teacher to check that the hub says Live hub, then tap Join again.";
   var FLAG_COPY = {
     swear: "That message was not sent. Please keep this chat school-appropriate.",
     putdown: "That message was not sent. Please do not put people down.",
@@ -595,7 +595,9 @@
     var c = state.cls;
     if (c) {
       c.cancelled = true;
+      c.stopped = true;
       if (c.timer) clearTimeout(c.timer);
+      if (c.watch) clearTimeout(c.watch);
       if (c.conn) { try { c.conn.close(); } catch (e) {} }
       if (c.peer) { try { c.peer.destroy(); } catch (e) {} }
     }
@@ -618,6 +620,7 @@
       c.wasConnected = true;
       c.retrying = false;
       if (c.timer) { clearTimeout(c.timer); c.timer = null; }
+      if (c.watch) { clearTimeout(c.watch); c.watch = null; }
       var joinBtn = q("[data-role='join-class']");
       if (joinBtn) joinBtn.hidden = true;
       c.className = String(data.className || "your class");
@@ -678,73 +681,98 @@
       setClassStatus("Your teacher ended the class session.");
     }
   }
+  function joinFailureText(c) {
+    var type = c.lastError || "";
+    if (type === "peer-unavailable") return "Class " + c.code + " is not live. Ask the teacher to open the teacher page until it says Live hub, then tap Join again.";
+    if (type === "unavailable-id") return "This Chromebook was still connected from a moment ago. Wait a few seconds, then tap Join again. The code is still " + c.code + ".";
+    if (type === "timeout") return "Class " + c.code + " did not finish connecting. Ask the teacher to check Live hub, then tap Join again.";
+    return CLASS_FAIL + " The code is " + c.code + ".";
+  }
   function failFinal(c) {
     if (state.cls !== c || c.cancelled) return;
+    c.stopped = true;
     if (c.timer) { clearTimeout(c.timer); c.timer = null; }
-    setClassStatus(CLASS_FAIL);
+    if (c.watch) { clearTimeout(c.watch); c.watch = null; }
+    try { if (c.conn) c.conn.close(); } catch (e) {}
+    try { if (c.peer) c.peer.destroy(); } catch (e) {}
+    c.conn = null;
+    c.peer = null;
+    setClassStatus(joinFailureText(c));
     var join = q("[data-role='join-class']");
     if (join) join.hidden = false;
   }
-  function scheduleRetry(c) {
-    if (state.cls !== c || c.cancelled || c.retrying) return;
+  function scheduleRetry(c, reason) {
+    if (state.cls !== c || c.cancelled || c.stopped || c.retrying) return;
     if (c.joined && c.conn && c.conn.open) return;
+    if (reason) c.lastError = reason;
     c.retrying = true;
     c.joined = false;
     if (c.timer) { clearTimeout(c.timer); c.timer = null; }
+    if (c.watch) { clearTimeout(c.watch); c.watch = null; }
     var oldConn = c.conn;
     var oldPeer = c.peer;
     c.conn = null;
     c.peer = null;
     try { if (oldConn) oldConn.close(); } catch (e) {}
     try { if (oldPeer) oldPeer.destroy(); } catch (e) {}
-    if (Date.now() > c.giveUpAt) { c.retrying = false; failFinal(c); return; }
+    if (c.tries >= 4) { c.retrying = false; failFinal(c); return; }
+    var wait = c.lastError === "unavailable-id" ? 3000 : 1200;
     setClassStatus(c.wasConnected
-      ? "Reconnecting to class " + c.code + "… Stay on this page. Your teacher does not need a new code."
-      : "Still connecting to class " + c.code + "… If your teacher just refreshed, stay on this page.");
+      ? "Reconnecting to class " + c.code + " (try " + (c.tries + 1) + " of 4). Stay on this page."
+      : "Still connecting to class " + c.code + " (try " + (c.tries + 1) + " of 4)…");
     c.timer = setTimeout(function () {
-      if (state.cls !== c || c.cancelled || c.joined) return;
+      if (state.cls !== c || c.cancelled || c.stopped || c.joined) return;
       c.retrying = false;
       c.tries += 1;
       attemptConnect(c);
-    }, 1000);
+    }, wait);
   }
   function attemptConnect(c) {
-    if (state.cls !== c || c.cancelled) return;
-    if (!c.wasConnected && c.tries === 1) setClassStatus("Connecting to class " + c.code + "…");
+    if (state.cls !== c || c.cancelled || c.stopped) return;
+    if (c.tries === 1) setClassStatus("Connecting to class " + c.code + "…");
+    else setClassStatus("Still connecting to class " + c.code + " (try " + c.tries + " of 4)…");
+    if (c.watch) clearTimeout(c.watch);
+    c.watch = setTimeout(function () {
+      if (state.cls !== c || c.cancelled || c.joined) return;
+      scheduleRetry(c, "timeout");
+    }, 12000);
     var peerObj;
     try { peerObj = new Peer(teacherPeerId(c.code) + "-s-" + c.sid, { debug: 0 }); }
-    catch (e) { scheduleRetry(c); return; }
+    catch (e) { scheduleRetry(c, "invalid-id"); return; }
     c.peer = peerObj;
     peerObj.on("open", function () {
-      if (state.cls !== c || c.cancelled || c.peer !== peerObj) return;
+      if (state.cls !== c || c.cancelled || c.stopped || c.peer !== peerObj) return;
+      setClassStatus("Found class " + c.code + ". Finishing the connection…");
       var conn;
       try { conn = peerObj.connect(teacherPeerId(c.code), { reliable: true, metadata: { studentId: c.sid } }); }
-      catch (e) { scheduleRetry(c); return; }
+      catch (e) { scheduleRetry(c, "network"); return; }
       c.conn = conn;
       conn.on("open", function () {
         if (state.cls !== c || c.conn !== conn) return;
-        try { conn.send({ type: "join", name: c.name, studentId: c.sid }); } catch (e) { scheduleRetry(c); }
+        try { conn.send({ type: "join", name: c.name, studentId: c.sid }); } catch (e) { scheduleRetry(c, "network"); }
       });
       conn.on("data", onTeacherMsg);
       conn.on("close", function () {
-        if (state.cls !== c || c.cancelled || c.conn !== conn) return;
+        if (state.cls !== c || c.cancelled || c.stopped || c.conn !== conn) return;
         c.wasConnected = true;
-        c.giveUpAt = Date.now() + 45000;
-        scheduleRetry(c);
+        scheduleRetry(c, "disconnected");
       });
-      conn.on("error", function () {
+      conn.on("error", function (err) {
         if (state.cls !== c || c.conn !== conn) return;
-        scheduleRetry(c);
+        scheduleRetry(c, (err && err.type) || "network");
       });
     });
     peerObj.on("error", function (err) {
-      if (state.cls !== c || c.cancelled || c.peer !== peerObj) return;
-      if (err && err.type === "unavailable-id") c.giveUpAt = Math.max(c.giveUpAt, Date.now() + 20000);
-      scheduleRetry(c);
+      if (state.cls !== c || c.cancelled || c.stopped || c.peer !== peerObj) return;
+      scheduleRetry(c, (err && err.type) || "network");
     });
     peerObj.on("disconnected", function () {
-      if (state.cls !== c || c.peer !== peerObj) return;
-      try { peerObj.reconnect(); } catch (e) { scheduleRetry(c); }
+      if (state.cls !== c || c.stopped || c.peer !== peerObj) return;
+      if (c.joined) {
+        try { peerObj.reconnect(); } catch (e) { scheduleRetry(c, "disconnected"); }
+        return;
+      }
+      scheduleRetry(c, "disconnected");
     });
   }
   function joinClass() {
@@ -761,8 +789,8 @@
     var sid = studentId();
     var c = state.cls = {
       code: code, name: name, sid: sid, peer: null, conn: null, joined: false, pairId: null, partner: null,
-      role: null, locked: false, timer: null, cancelled: false, retrying: false, tries: 1, wasConnected: false,
-      giveUpAt: Date.now() + 45000
+      role: null, locked: false, timer: null, watch: null, cancelled: false, stopped: false, retrying: false,
+      tries: 1, wasConnected: false, lastError: ""
     };
     q("[data-role='join-class']").hidden = true;
     q("[data-role='leave-class']").hidden = false;
