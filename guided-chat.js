@@ -6,7 +6,7 @@
   var script = document.currentScript;
   var base = new URL("./", script && script.src ? script.src : location.href);
 
-  var NOTE = "Your partner only sees Italian that was sent. English, practice mistakes, and flagged messages stay on your screen.";
+  var NOTE = "Your partner only sees Italian that was sent.";
   var BLOCKED = "That does not look like Italian yet. Try a phrase chip, or write a real Italian sentence.";
   var FREE = "Now write your own message in Italian.";
   var NO_PARTNER = "No partner is connected, so this stayed here. Use Try both sides, or Join class.";
@@ -164,19 +164,27 @@
       R + " .joinbar button { min-height:40px; background:var(--me); color:#fff; border:0; border-radius:12px; padding:8px 14px; font-weight:700; cursor:pointer; }",
       R + " .joinbar button.quiet { background:var(--chip); color:var(--text); border:1px solid var(--chip-border); }",
       R + " .class-status { flex:1 1 100%; text-align:center; margin:0; font-size:15px; color:var(--soft); }",
-      R + " .stage { flex:1; min-height:0; display:flex; justify-content:stretch; align-items:stretch; gap:0; padding:0; }",
-      R + " .student { position:relative; flex:1 1 auto; width:100%; max-width:none; min-width:0; min-height:0; display:flex; flex-direction:column; background:var(--bg); overflow:hidden; border:0; border-radius:0; box-shadow:none; }",
-      R + " .stage.both .student + .student { border-left:1px solid #2c2c2e; }",
-      "@media (max-width:800px) { " + R + " .stage.both { flex-direction:column; } " + R + " .stage.both .student + .student { border-left:0; border-top:1px solid #2c2c2e; } }",
+      R + " .stage { flex:1; min-height:0; display:flex; justify-content:center; align-items:flex-start; padding:18px 20px 20px; overflow:hidden; }",
+      R + " .desk { display:flex; align-items:flex-start; justify-content:center; gap:18px; width:min(1120px, 100%); max-height:100%; min-height:0; }",
+      R + " .student { position:relative; flex:1 1 720px; width:auto; max-width:840px; min-width:0; min-height:0; max-height:100%; display:flex; flex-direction:column; background:var(--bg); overflow:hidden; border:1px solid #2c2c2e; border-radius:20px; box-shadow:0 16px 40px rgba(0,0,0,.35); }",
+      R + " .tips { flex:0 0 280px; width:280px; max-height:100%; overflow:auto; background:#141416; border:1px solid #2c2c2e; border-radius:20px; padding:16px 16px 18px; }",
+      R + " .tips h2 { margin:0 0 8px; font-size:18px; line-height:1.25; }",
+      R + " .tips-who { margin:0 0 12px; color:#fff; font-size:15px; font-weight:650; line-height:1.35; }",
+      R + " .tips ul { margin:0; padding:0; list-style:none; display:flex; flex-direction:column; gap:8px; }",
+      R + " .tips li { margin:0; padding:10px 12px; background:#1c1c1e; border:1px solid #3a3a3c; border-radius:12px; color:var(--soft); font-size:14px; line-height:1.4; }",
+      R + " .stage.both .tips { display:none; }",
+      R + " .stage.both .desk { width:min(1080px, 100%); }",
+      R + " .stage.both .student { max-width:520px; }",
+      "@media (max-width:900px) { " + R + " .tips { display:none; } " + R + " .student, " + R + " .stage.both .student { max-width:none; } " + R + " .stage.both .desk { flex-direction:column; align-items:stretch; } }",
       R + " .who { display:flex; flex-direction:row; align-items:center; gap:12px; padding:10px 18px; background:rgba(28,28,30,.92); border-bottom:1px solid rgba(84,84,88,.55); flex-shrink:0; }",
       R + " .avatar { width:44px; height:44px; border-radius:50%; display:grid; place-items:center; font-weight:650; font-size:18px; color:#fff; background:linear-gradient(145deg,#64d2ff,#007AFF); flex-shrink:0; }",
       R + " .student[data-student='B'] .avatar { background:linear-gradient(145deg,#30d158,#64d2ff); }",
       R + " .who-text { display:flex; flex-direction:column; gap:2px; min-width:0; }",
       R + " .who-name { font-size:17px; font-weight:650; line-height:1.2; }",
       R + " .who-title { color:var(--soft); font-size:14px; line-height:1.3; }",
-      R + " .note { flex-shrink:0; margin:0; color:var(--soft); padding:8px 18px; font-size:14px; line-height:1.4; text-align:center; }",
-      R + " .thread { flex:1 1 auto; min-height:0; overflow:auto; padding:14px 18px; display:flex; flex-direction:column; gap:8px; }",
-      R + " .empty { color:var(--dim); font-size:15px; text-align:center; margin:12px 8px; }",
+      R + " .note { flex-shrink:0; margin:0; color:var(--soft); padding:8px 16px; font-size:14px; line-height:1.35; text-align:center; }",
+      R + " .thread { flex:0 1 auto; min-height:0; max-height:min(320px, calc(100vh - 470px)); overflow:auto; padding:12px 14px; display:flex; flex-direction:column; justify-content:flex-end; gap:8px; }",
+      R + " .empty { color:var(--soft); font-size:15px; line-height:1.4; text-align:left; margin:0; padding:12px 14px; background:#141416; border:1px solid #2c2c2e; border-radius:14px; }",
       R + " .bubble { max-width:36rem; padding:8px 14px; border-radius:18px; font-size:17px; line-height:1.35; word-break:break-word; }",
       R + " .bubble.me { align-self:flex-end; background:var(--me); color:#fff; border-bottom-right-radius:5px; }",
       R + " .bubble.them { align-self:flex-start; background:var(--them); color:#fff; border-bottom-left-radius:5px; }",
@@ -209,10 +217,14 @@
   }
 
   /* ---------- threads ---------- */
+  function emptyCopy() {
+    if (state.convo && isOpenConvo()) return "No messages yet. Type your own Italian, or tap an idea below.";
+    return "No messages yet. Tap a phrase below, or type it in Italian.";
+  }
   function clearThread(student) {
     var thread = student.root.querySelector("[data-role='thread']");
     thread.textContent = "";
-    thread.appendChild(el("p", { class: "empty", "data-role": "empty", text: "No messages yet." }));
+    thread.appendChild(el("p", { class: "empty", "data-role": "empty", text: emptyCopy() }));
     student.step = 0;
     hideHelp(student);
   }
@@ -323,9 +335,47 @@
     student.root.querySelector("[data-role='who-name']").textContent = name;
     student.root.querySelector("[data-role='avatar']").textContent = (name.charAt(0) || "?").toUpperCase();
     student.root.querySelector("[data-role='title']").textContent = state.convo.title || "";
+    var empty = student.root.querySelector("[data-role='empty']");
+    if (empty) empty.textContent = emptyCopy();
+  }
+  function renderTips() {
+    var aside = q("[data-role='tips']");
+    if (!aside) return;
+    var title = aside.querySelector("[data-role='tips-title']");
+    var who = aside.querySelector("[data-role='tips-who']");
+    var list = aside.querySelector("[data-role='tips-list']");
+    var lines;
+    if (isOpenConvo()) {
+      title.textContent = "Open Italian chat";
+      lines = [
+        "Write whatever you want in Italian.",
+        "Idea buttons are optional.",
+        "Your partner only sees Italian that was sent.",
+        "Unkind or unsafe words are not sent. Your teacher sees a flag."
+      ];
+    } else {
+      title.textContent = (state.convo && state.convo.title) || "Guided chat";
+      lines = [
+        "Follow the step under the messages.",
+        "Tap a phrase, or type that Italian yourself.",
+        "When it is your partner's turn, wait.",
+        "English stays on your screen."
+      ];
+    }
+    var partner = "Practice on this computer.";
+    if (state.both) partner = "You are trying both sides on this computer.";
+    else if (state.mode === "class" && state.cls) {
+      if (classPaired()) partner = "Paired with " + state.cls.partner + ".";
+      else if (state.cls.joined) partner = "Waiting for the teacher to pair you.";
+      else partner = "Join the class to get a partner.";
+    }
+    who.textContent = partner;
+    list.textContent = "";
+    lines.forEach(function (line) { list.appendChild(el("li", { text: line })); });
   }
   function renderAll() {
     ["A", "B"].forEach(function (id) { if (state.students[id]) renderChrome(state.students[id]); });
+    renderTips();
   }
   function maybeAdvanceShared(student, canon) {
     var steps = state.convo.steps || [];
@@ -760,11 +810,19 @@
       joinbar.querySelector("[data-role='join-name']").addEventListener("keydown", function (e) { if (e.key === "Enter") joinClass(); });
     }
     var stage = el("div", { class: "stage", "data-role": "stage" });
+    var desk = el("div", { class: "desk", "data-role": "desk" });
     state.students.A = makeStudent("A");
     state.students.B = makeStudent("B");
     state.students.B.root.hidden = true;
-    stage.appendChild(state.students.A.root);
-    stage.appendChild(state.students.B.root);
+    var tips = el("aside", { class: "tips", "data-role": "tips", "aria-label": "Chat tips" },
+      el("h2", { "data-role": "tips-title", text: "Open Italian chat" }),
+      el("p", { class: "tips-who", "data-role": "tips-who", text: "" }),
+      el("ul", { "data-role": "tips-list" })
+    );
+    desk.appendChild(state.students.A.root);
+    desk.appendChild(state.students.B.root);
+    desk.appendChild(tips);
+    stage.appendChild(desk);
     mount.appendChild(stage);
 
     var wanted = mount.getAttribute("data-level") || "1";
