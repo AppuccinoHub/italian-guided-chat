@@ -426,9 +426,16 @@
   }
 
   function setHubNote(text) { var n = $('hubNote'); if (n) n.textContent = text || ''; }
+  function hubErrorType(err) { return (err && (err.type || err.message)) || 'network'; }
   function retryableHubError(err) {
-    var type = err && (err.type || err.message);
+    var type = hubErrorType(err);
     return type === 'unavailable-id' || type === 'network' || type === 'server-error' || type === 'socket-error' || type === 'socket-closed' || type === 'disconnected' || type === 'timeout' || type === 'webrtc';
+  }
+  function hubFailureText(err, code) {
+    var type = hubErrorType(err);
+    if (type === 'unavailable-id') return 'The class code ' + code + ' is still registered from a previous connection. Wait a few seconds, then tap Reconnect hub.';
+    if (type === 'network' || type === 'server-error' || type === 'socket-error' || type === 'socket-closed' || type === 'timeout') return 'The class service did not answer. Check the internet, then tap Reconnect hub. The code is still ' + code + '.';
+    return 'The class hub did not connect (' + type + '). Tap Reconnect hub. The code is still ' + code + '.';
   }
   var hubAttempt = 0;
   function startPeerOnce(code) {
@@ -438,7 +445,8 @@
       if (peer) { try { peer.destroy(); } catch (e) {} peer = null; }
       var attemptPeer = null;
       var settled = false;
-      var timer = setTimeout(function () { finish({ type: 'timeout', message: 'timeout' }); }, 8000);
+      var reconnects = 0;
+      var timer = setTimeout(function () { finish({ type: 'timeout', message: 'timeout' }); }, 15000);
       function finish(err) {
         if (settled) return;
         settled = true;
@@ -453,6 +461,7 @@
       catch (e) { finish({ type: 'invalid-id', message: String(e && e.message || e) }); return; }
       peer = attemptPeer;
       attemptPeer.on('open', function () {
+        reconnects = 0;
         setHub(true, 'Live hub');
         $('hubHelp').hidden = true;
         $('btnReconnect').hidden = true;
@@ -460,34 +469,48 @@
       });
       attemptPeer.on('connection', onConnection);
       attemptPeer.on('error', function (err) {
-        if (err && err.type === 'peer-unavailable') return; // a student left; not fatal
+        if (err && err.type === 'peer-unavailable') return;
         if (!settled) finish(err || { type: 'network', message: 'network' });
-        else if (session && session.code === code && err && err.type === 'unavailable-id') startPeerRetry(code);
-        else if (err && retryableHubError(err)) {
-          setHub(false, 'Reconnecting');
-          setHubNote('The connection blipped. Reconnecting. The class code has not changed.');
-          try { attemptPeer.reconnect(); } catch (e) {}
+        else if (reconnects > 2) {
+          setHub(false, 'Not connected');
+          setHubNote(hubFailureText(err, code));
+          $('btnReconnect').hidden = false;
         }
       });
       attemptPeer.on('disconnected', function () {
-        if (!settled || !session) return;
+        if (!settled || !session || peer !== attemptPeer) return;
+        reconnects += 1;
+        if (reconnects > 2) {
+          setHub(false, 'Not connected');
+          setHubNote('The class hub dropped. Tap Reconnect hub. The code is still ' + code + '.');
+          $('btnReconnect').hidden = false;
+          return;
+        }
         setHub(false, 'Reconnecting');
-        setHubNote('Reconnecting your class. The code has not changed.');
-        try { attemptPeer.reconnect(); } catch (e) {}
+        setHubNote('Reconnecting. The code has not changed.');
+        try { attemptPeer.reconnect(); } catch (e) {
+          setHub(false, 'Not connected');
+          setHubNote(hubFailureText({ type: 'network' }, code));
+          $('btnReconnect').hidden = false;
+        }
       });
     });
   }
   function startPeerRetry(code) {
     var token = ++hubAttempt;
+    var maxTries = 4;
     function once(n) {
-      if (token !== hubAttempt) return Promise.reject({ type: 'replaced' });
+      if (token !== hubAttempt || !session || session.code !== code) return Promise.reject({ type: 'replaced' });
+      setHub(false, n === 1 ? 'Connecting' : 'Reconnecting');
+      setHubNote(n === 1
+        ? 'Connecting to the class service…'
+        : 'Still connecting (try ' + n + ' of ' + maxTries + '). The code ' + code + ' is not changing.');
       return startPeerOnce(code).catch(function (err) {
-        if (token !== hubAttempt) return Promise.reject(err);
-        if (n < 6 && retryableHubError(err)) {
-          setHub(false, 'Reconnecting');
-          setHubNote('Reconnecting your class. The code ' + code + ' has not changed.');
+        if (token !== hubAttempt || !session || session.code !== code) return Promise.reject(err);
+        if (n < maxTries && retryableHubError(err)) {
+          var wait = hubErrorType(err) === 'unavailable-id' ? 4000 : 1500;
           return new Promise(function (resolve, reject) {
-            setTimeout(function () { once(n + 1).then(resolve, reject); }, 700 * n);
+            setTimeout(function () { once(n + 1).then(resolve, reject); }, wait);
           });
         }
         throw err;
@@ -503,20 +526,32 @@
     renderRoster(); renderPairs();
     toast(restored ? 'Class restored. Same code.' : 'Session live. Share the code.');
   }
-  function onHubFail() {
-    setHub(false, 'Offline');
+  function onHubFail(err) {
+    setHub(false, 'Not connected');
     $('hubHelp').hidden = false;
     $('btnReconnect').hidden = false;
-    if (session) setHubNote('The class is saved, but the hub is not connected. Tap Reconnect hub. The code stays ' + session.code + '.');
+    if (session) setHubNote(hubFailureText(err, session.code));
   }
 
-  function joinUrl() { return location.origin + location.pathname.replace(/teacher\.html$/, '') + '?join=' + encodeURIComponent(session.code); }
+  function joinUrl() {
+    var level = session.level || "1";
+    return location.origin + location.pathname.replace(/teacher\.html$/, '') + '?join=' + encodeURIComponent(session.code) + '&level=' + encodeURIComponent(level);
+  }
+  function refreshJoinLink() {
+    if (!session) return;
+    var u = joinUrl();
+    var link = $('joinUrl');
+    if (!link) return;
+    link.textContent = u;
+    link.href = u;
+  }
   function showSession() {
     $('sessionBlock').hidden = false;
     $('joinCode').textContent = session.code;
     var u = joinUrl(); $('joinUrl').textContent = u; $('joinUrl').href = u;
     $('btnEnd').disabled = false; $('btnCreate').disabled = true; $('reopenRow').hidden = true;
     $('className').value = session.className; $('levelSel').value = session.level; $('lockLevel').checked = session.locked;
+    refreshJoinLink();
   }
   function createSession() {
     var code = makeCode();
@@ -528,10 +563,17 @@
     showSession();
     setHub(false, 'Connecting');
     setHubNote('Starting the class hub…');
-    startPeerRetry(code).then(function () { onHubReady(false); }).catch(function () {
-      if (session && session.code === code) { session.active = false; session.ended = true; save(); session = null; }
-      $('sessionBlock').hidden = true; $('btnCreate').disabled = false; $('btnEnd').disabled = true;
-      setHub(false, 'Offline'); $('hubHelp').hidden = false;
+    startPeerRetry(code).then(function () { onHubReady(false); }).catch(function (err) {
+      if (err && err.type === 'replaced') return;
+      if (session && session.code === code) {
+        setHub(false, 'Not connected');
+        setHubNote(hubFailureText(err, code));
+        $('hubHelp').hidden = false;
+        $('btnReconnect').hidden = false;
+        $('btnEnd').disabled = false;
+        $('btnCreate').disabled = true;
+        save();
+      }
       toast('Could not start the class hub');
     });
   }
@@ -554,7 +596,7 @@
     $('btnReconnect').hidden = true;
     setHub(false, 'Reconnecting');
     setHubNote('Bringing your class back. The code has not changed.');
-    startPeerRetry(session.code).then(function () { onHubReady(true); }).catch(function () { onHubFail(); toast('Could not reconnect the class hub'); });
+    startPeerRetry(session.code).then(function () { onHubReady(true); }).catch(function (err) { onHubFail(err); toast('Could not reconnect the class hub'); });
   }
   function reopenSession() {
     var saved = load(); if (!saved || !saved.code) { toast('No saved session on this device'); return; }
@@ -567,7 +609,7 @@
     $('btnReconnect').hidden = true;
     setHub(false, 'Reconnecting');
     setHubNote('Reconnecting your class. The code has not changed.');
-    startPeerRetry(session.code).then(function () { onHubReady(true); }).catch(function () { onHubFail(); toast('Could not reconnect the class hub'); });
+    startPeerRetry(session.code).then(function () { onHubReady(true); }).catch(function (err) { onHubFail(err); toast('Could not reconnect the class hub'); });
   }
   function maybeRestore() {
     var saved = load();
@@ -591,7 +633,10 @@
     session.level = $('levelSel').value; session.locked = $('lockLevel').checked;
     Object.keys(session.students).forEach(function (sid) { send(sid, { type: 'level', level: session.level, locked: session.locked }); });
     session.pairOrder.forEach(function (id) { var p = session.pairs[id]; if (p) { p.level = session.level; p.convoId = null; p.step = 0; } });
-    save(); renderPairs(); toast('Level ' + session.level + (session.locked ? ' (locked)' : ''));
+    save();
+    refreshJoinLink();
+    renderPairs();
+    toast('Level ' + session.level + (session.locked ? ' (locked)' : ''));
   }
   function checkReopen() { var s = load(); $('reopenRow').hidden = !(s && s.code) || !!session; }
 
