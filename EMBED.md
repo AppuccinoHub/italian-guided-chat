@@ -25,6 +25,10 @@ Use only one chat per page. The div must have the id italian-guided-chat.
 
 Students may type free Italian (not only the chips); English is still blocked and stays on their screen.
 
+Level 4 is an open Italian chat. Students type whatever they want in Italian. Optional idea chips are not a step-by-step script, and the screen does not say "Step N of 4." Levels 1, 2, 3, and AP keep guided steps.
+
+Swears, put-downs, and talk about hurting someone are flagged. The student sees a warning that the message was not sent. In a class, the teacher sees a flag with the text and a category (swear, put-down, or harm). The partner does not receive it. The word list is in safety.js.
+
 The embed is for phrase practice (Practice alone and Try both sides). Class pairing with a teacher needs the stand-alone site: the teacher opens https://appuccinohub.github.io/italian-guided-chat/teacher.html, and students open https://appuccinohub.github.io/italian-guided-chat/ and choose Join class (or use the ?join=CODE link the teacher page shows).
 
 ## Adding a conversation
@@ -36,7 +40,7 @@ Each conversation goes inside the "conversations" list. It needs:
 - id: a short unique name with no spaces.
 - level: "1", "2", "3", "4", or "AP" (in quotes).
 - title: what students see.
-- steps: a list. Each step has a prompt (an English instruction) and chips (the Italian phrases students can tap).
+- steps: a list. Each step has a prompt (an English instruction) and chips (the Italian phrases students can tap). Level 4 is the exception: set `"open": true`, leave `steps` empty, and put optional Italian ideas in `suggestions` instead of guided steps.
 
 Example. Add this to the list, with a comma after the conversation before it:
 

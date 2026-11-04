@@ -117,38 +117,15 @@
     {
       "id": "opinion",
       "level": "4",
-      "title": "Give an opinion",
-      "steps": [
-        {
-          "prompt": "Ask what they think.",
-          "chips": [
-            "Che cosa ne pensi?",
-            "Ti piace?"
-          ]
-        },
-        {
-          "prompt": "Give your opinion.",
-          "chips": [
-            "Secondo me è interessante.",
-            "Secondo me è noioso.",
-            "Mi piace molto."
-          ]
-        },
-        {
-          "prompt": "Ask why.",
-          "chips": [
-            "Perché?",
-            "Come mai?"
-          ]
-        },
-        {
-          "prompt": "Give a reason.",
-          "chips": [
-            "Perché è divertente.",
-            "Perché non ho tempo."
-          ]
-        }
-      ]
+      "title": "Open Italian chat",
+      "open": true,
+      "suggestions": [
+        "Che cosa ne pensi?",
+        "Ti piace?",
+        "Secondo me è interessante.",
+        "Perché?"
+      ],
+      "steps": []
     },
     {
       "id": "agree",
