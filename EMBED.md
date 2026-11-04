@@ -25,6 +25,8 @@ Use only one chat per page. The div must have the id italian-guided-chat.
 
 Students may type free Italian (not only the chips); English is still blocked and stays on their screen.
 
+The embed is for phrase practice (Practice alone and Try both sides). Class pairing with a teacher needs the stand-alone site: the teacher opens https://appuccinohub.github.io/italian-guided-chat/teacher.html, and students open https://appuccinohub.github.io/italian-guided-chat/ and choose Join class (or use the ?join=CODE link the teacher page shows).
+
 ## Adding a conversation
 
 Edit conversations.json in this repo (AppuccinoHub/italian-guided-chat) and push to main. GitHub Pages updates the live site in a minute or two, and every page that uses the snippet gets the new conversation. There is no rebuild.

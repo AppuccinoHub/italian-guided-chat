@@ -1,4 +1,5 @@
-/* Italian guided chat — test copy. Not the live fill-in-the-blank apps. */
+/* Italian guided chat — phrase chips, turn-taking, free Italian, English blocked.
+   Modes: Practice alone / Try both sides / Join class (teacher.html is the PeerJS hub). */
 (function () {
   var script = document.currentScript;
   var base = new URL("./", script && script.src ? script.src : location.href);
@@ -6,8 +7,9 @@
   var NOTE = "Your partner only sees Italian. English and practice mistakes stay on your screen.";
   var BLOCKED = "That does not look like Italian yet. Try a phrase chip, or write a real Italian sentence.";
   var FREE = "Now write your own message in Italian.";
-  var NO_PARTNER = "No partner is connected, so this stayed here. Use Try both sides, or a 4-letter room code.";
+  var NO_PARTNER = "No partner is connected, so this stayed here. Use Try both sides, or Join class.";
   var WAITING = "Waiting for your partner.";
+  var CLASS_FAIL = "Could not reach the teacher's class. Check the code with your teacher, or use Try both sides on this computer.";
 
   var SWAPS = [
     { label: "hello -> Ciao!", keys: ["hello"], it: "Ciao!" },
@@ -30,66 +32,42 @@
     convo: null,
     level: "1",
     step: 0,
-    role: null,
+    mode: "solo",
     both: false,
-    peer: null,
-    conn: null,
-    peerTimer: null,
+    standalone: false,
     students: {},
     italian: Object.create(null),
-    phraseMap: null
+    phraseMap: null,
+    cls: null
   };
 
+  /* ---------- text helpers ---------- */
   function foldIt(s) {
-    return String(s || "")
-      .normalize("NFD")
-      .replace(/[\u0300-\u036f]/g, "")
-      .toLowerCase()
-      .replace(/[\u2019\u2018`]/g, "'")
-      .replace(/\s+/g, " ")
-      .trim();
+    return String(s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase()
+      .replace(/[\u2019\u2018`]/g, "'").replace(/\s+/g, " ").trim();
   }
-
   function matchKey(s) {
-    return foldIt(s)
-      .replace(/[^a-z0-9' ]+/g, " ")
-      .replace(/\s+/g, " ")
-      .trim();
+    return foldIt(s).replace(/[^a-z0-9' ]+/g, " ").replace(/\s+/g, " ").trim();
   }
-
   function foldEn(s) {
-    return String(s || "")
-      .toLowerCase()
-      .replace(/[\u2019\u2018`]/g, "'")
-      .replace(/[?!.,;:]+/g, "")
-      .replace(/\s+/g, " ")
-      .trim();
+    return String(s || "").toLowerCase().replace(/[\u2019\u2018`]/g, "'").replace(/[?!.,;:]+/g, "")
+      .replace(/\s+/g, " ").trim();
   }
-
   function wordTokens(text) {
     var raw = String(text || "").toLowerCase().replace(/[\u2019\u2018`]/g, "'");
     var m = raw.match(/[a-z\u00e0-\u024f']+/g);
     if (!m) return [];
-    return m.map(function (w) {
-      return w.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-    });
+    return m.map(function (w) { return w.normalize("NFD").replace(/[\u0300-\u036f]/g, ""); });
   }
-
   function learnWord(raw) {
     var k = foldIt(raw).replace(/[^a-z']/g, "");
     if (!k) return;
     state.italian[k] = true;
-    k.split("'").forEach(function (bit) {
-      if (bit) state.italian[bit] = true;
-    });
+    k.split("'").forEach(function (bit) { if (bit) state.italian[bit] = true; });
   }
-
   function learnPhrase(phrase) {
-    String(phrase).split(/[^A-Za-z\u00C0-\u024F'\u2019]+/).forEach(function (part) {
-      if (part) learnWord(part);
-    });
+    String(phrase).split(/[^A-Za-z\u00C0-\u024F'\u2019]+/).forEach(function (part) { if (part) learnWord(part); });
   }
-
   function rebuildMap() {
     var map = Object.create(null);
     var phrases = [];
@@ -103,13 +81,11 @@
     });
     state.phraseMap = map;
   }
-
   function canonical(text) {
     if (!state.phraseMap) return null;
     var key = matchKey(text);
     return key ? state.phraseMap[key] || null : null;
   }
-
   function matchSwap(text) {
     var key = foldEn(text);
     for (var i = 0; i < SWAPS.length; i++) {
@@ -117,16 +93,12 @@
     }
     return null;
   }
-
   function isEnglish(text) {
     if (matchSwap(text)) return true;
     var words = wordTokens(text);
-    for (var i = 0; i < words.length; i++) {
-      if (EN_FUNC[words[i]]) return true;
-    }
+    for (var i = 0; i < words.length; i++) { if (EN_FUNC[words[i]]) return true; }
     return false;
   }
-
   function isGibberish(text) {
     if (/[\u00C0-\u024F]/.test(String(text || ""))) return false;
     var words = wordTokens(text);
@@ -141,7 +113,6 @@
     }
     return true;
   }
-
   function el(tag, attrs) {
     var node = document.createElement(tag);
     if (attrs) {
@@ -151,85 +122,81 @@
         else node.setAttribute(key, attrs[key]);
       });
     }
-    for (var i = 2; i < arguments.length; i++) {
-      if (arguments[i]) node.appendChild(arguments[i]);
-    }
+    for (var i = 2; i < arguments.length; i++) { if (arguments[i]) node.appendChild(arguments[i]); }
     return node;
   }
+  function q(sel) { return document.querySelector("#italian-guided-chat " + sel); }
 
+  /* ---------- look: Italian DMs Solo phone (dark) ---------- */
   function injectCss() {
     if (document.getElementById("guided-chat-css")) return;
     var style = document.createElement("style");
     style.id = "guided-chat-css";
+    var R = "#italian-guided-chat";
     style.textContent = [
-      "html.guided-fill, html.guided-fill body { height:100%; margin:0; overflow:hidden; background:#FFE9C9; }",
-      "html.guided-fill #italian-guided-chat { height:100%; min-height:0; }",
-      "#italian-guided-chat { box-sizing:border-box; min-height:640px; height:100%; display:flex; flex-direction:column; background:#FFE9C9; color:#0E2A5B; font-family:system-ui,-apple-system,'Segoe UI',Roboto,Arial,sans-serif; }",
-      "#italian-guided-chat * { box-sizing:border-box; }",
-      "#italian-guided-chat button, #italian-guided-chat input, #italian-guided-chat select { font:inherit; color:inherit; }",
-      "#italian-guided-chat .toolbar { display:flex; flex-wrap:wrap; gap:8px; align-items:center; padding:10px 12px; background:#fff; border-bottom:3px solid #BFE3EA; }",
-      "#italian-guided-chat .toolbar label { display:flex; align-items:center; gap:6px; font-size:14px; font-weight:700; color:#4F5E80; }",
-      "#italian-guided-chat .toolbar label[hidden] { display:none !important; }",
-      "#italian-guided-chat .toolbar select { min-height:40px; background:#fff; border:3px solid #BFE3EA; border-radius:14px; padding:6px 10px; color:#0E2A5B; font-weight:800; }",
-      "#italian-guided-chat .toolbar button { min-height:40px; background:#fff; border:3px solid #BFE3EA; border-radius:999px; padding:8px 14px; cursor:pointer; color:#0E2A5B; font-weight:800; box-shadow:0 3px 0 #BFE3EA; }",
-      "#italian-guided-chat .toolbar button:active { transform:translateY(2px); box-shadow:0 1px 0 #BFE3EA; }",
-      "#italian-guided-chat .toolbar button[aria-pressed='true'] { background:#1A5CDF; border-color:#1A5CDF; color:#fff; box-shadow:0 5px 0 #0E2A5B; }",
-      "#italian-guided-chat .toolbar button[aria-pressed='true']:active { box-shadow:0 2px 0 #0E2A5B; }",
-      "#italian-guided-chat .room { padding:10px 12px 12px; background:#FFF6E8; border-bottom:3px solid #BFE3EA; display:flex; flex-wrap:wrap; gap:8px; align-items:center; }",
-      "#italian-guided-chat .room[hidden] { display:none !important; }",
-      "#italian-guided-chat .room input { min-height:40px; width:6.5rem; letter-spacing:.2em; text-transform:uppercase; background:#fff; border:3px solid #BFE3EA; border-radius:14px; padding:8px; color:#0E2A5B; font-weight:800; }",
-      "#italian-guided-chat .room input:focus { border-color:#10BFBF; outline:0; }",
-      "#italian-guided-chat .room button { min-height:40px; background:#1A5CDF; border:0; border-radius:999px; padding:8px 14px; cursor:pointer; color:#fff; font-weight:800; box-shadow:0 5px 0 #0E2A5B; }",
-      "#italian-guided-chat .room button:active { transform:translateY(3px); box-shadow:0 2px 0 #0E2A5B; }",
-      "#italian-guided-chat .code { font-size:28px; font-weight:800; letter-spacing:.18em; min-width:5.2rem; color:#0E2A5B; }",
-      "#italian-guided-chat .peer-status { flex:1 1 220px; font-size:14px; color:#4F5E80; font-weight:600; margin:0; }",
-      "#italian-guided-chat .stage { flex:1; min-height:0; display:grid; grid-template-columns:1fr; }",
-      "#italian-guided-chat .stage.both { grid-template-columns:1fr 1fr; gap:10px; padding:10px; }",
-      "@media (max-width:800px) { #italian-guided-chat .stage.both { grid-template-columns:1fr; grid-template-rows:1fr 1fr; } }",
-      "#italian-guided-chat .student { height:100%; min-height:0; display:flex; flex-direction:column; background:#FFF6E8; overflow:hidden; }",
-      "#italian-guided-chat .stage.both .student { border:3px solid #BFE3EA; border-radius:22px; background:#fff; box-shadow:0 2px 0 #BFE3EA; }",
-      "#italian-guided-chat .student[hidden] { display:none !important; }",
-      "#italian-guided-chat .who { display:flex; gap:8px; align-items:center; padding:10px 12px 4px; }",
-      "#italian-guided-chat .avatar { width:34px; height:34px; border-radius:50%; display:grid; place-items:center; font-weight:800; background:#1A5CDF; color:#fff; }",
-      "#italian-guided-chat .student[data-student='B'] .avatar { background:#10BFBF; color:#fff; }",
-      "#italian-guided-chat .who-name { font-weight:800; font-size:15px; color:#0E2A5B; }",
-      "#italian-guided-chat .who-title { color:#4F5E80; font-size:13px; font-weight:600; }",
-      "#italian-guided-chat .note { background:#E8F4F7; color:#0E2A5B; padding:8px 12px; font-size:13px; line-height:1.35; font-weight:600; border-top:2px solid #BFE3EA; border-bottom:2px solid #BFE3EA; }",
-      "#italian-guided-chat .thread { flex:1; min-height:72px; overflow:auto; padding:10px 12px; display:flex; flex-direction:column; gap:8px; background:#FFE9C9; }",
-      "#italian-guided-chat .stage.both .thread { background:#FFF6E8; }",
-      "#italian-guided-chat .empty { color:#4F5E80; font-size:14px; text-align:center; margin:12px 8px; font-weight:600; }",
-      "#italian-guided-chat .bubble { max-width:82%; padding:10px 14px; border-radius:18px; font-size:16px; line-height:1.35; word-break:break-word; font-weight:650; }",
-      "#italian-guided-chat .bubble.me { align-self:flex-end; background:#1A5CDF; color:#fff; border-bottom-right-radius:6px; box-shadow:0 3px 0 #0E2A5B; }",
-      "#italian-guided-chat .bubble.them { align-self:flex-start; background:#fff; color:#0E2A5B; border:2px solid #BFE3EA; border-bottom-left-radius:6px; }",
-      "#italian-guided-chat .bubble.pending { align-self:flex-end; background:#fff; color:#0E2A5B; border:2px dashed #F28C28; border-bottom-right-radius:6px; box-shadow:none; }",
-      "#italian-guided-chat .bubble .why { display:block; margin-top:6px; font-size:12px; font-weight:800; color:#F28C28; }",
-      "#italian-guided-chat .prompt { padding:6px 12px 0; font-size:14px; color:#0E2A5B; line-height:1.35; font-weight:700; }",
-      "#italian-guided-chat .prompt .step { color:#4F5E80; }",
-      "#italian-guided-chat .prompt .waiting { color:#F28C28; font-weight:800; }",
-      "#italian-guided-chat .chips { display:flex; flex-wrap:wrap; gap:8px; padding:8px 12px; max-height:140px; overflow:auto; }",
-      "#italian-guided-chat .chips button, #italian-guided-chat .swap button { min-height:40px; border-radius:999px; border:3px solid #BFE3EA; background:#fff; color:#0E2A5B; font-weight:800; padding:8px 14px; cursor:pointer; box-shadow:0 1px 0 #BFE3EA; }",
-      "#italian-guided-chat .chips button:active, #italian-guided-chat .swap button:active { border-color:#10BFBF; background:#E2F7F7; }",
-      "#italian-guided-chat .help { margin:0 12px 8px; background:#FDECEC; color:#B3261E; border:2px solid #F5C2C0; border-radius:14px; padding:8px 10px; max-height:150px; overflow:auto; font-size:14px; }",
-      "#italian-guided-chat .help[hidden] { display:none !important; }",
-      "#italian-guided-chat .help-lead { margin:0 0 6px; font-weight:800; }",
-      "#italian-guided-chat .help-label { margin:0 0 4px; color:#B3261E; font-size:12px; font-weight:800; }",
-      "#italian-guided-chat .swap { display:flex; align-items:center; gap:6px; margin:4px 0; color:#0E2A5B; }",
-      "#italian-guided-chat .swap.match button { outline:3px solid #F28C28; outline-offset:2px; }",
-      "#italian-guided-chat .composer { display:flex; gap:8px; padding:8px 12px 12px; background:#fff; border-top:3px solid #BFE3EA; }",
-      "#italian-guided-chat .composer input { flex:1; min-width:0; border-radius:20px; border:3px solid #BFE3EA; background:#fff; padding:10px 14px; font-size:16px; color:#0E2A5B; font-weight:700; }",
-      "#italian-guided-chat .composer input:focus { border-color:#10BFBF; outline:0; }",
-      "#italian-guided-chat .composer input::placeholder { color:#4F5E80; font-weight:600; }",
-      "#italian-guided-chat .composer button { background:#1A5CDF; color:#fff; border:0; border-radius:999px; min-width:72px; min-height:44px; font-weight:800; cursor:pointer; box-shadow:0 5px 0 #0E2A5B; }",
-      "#italian-guided-chat .composer button:active { transform:translateY(3px); box-shadow:0 2px 0 #0E2A5B; }",
-      "#italian-guided-chat button:focus-visible, #italian-guided-chat input:focus-visible, #italian-guided-chat select:focus-visible { outline:4px solid #F28C28; outline-offset:2px; }"
+      "html.guided-fill, html.guided-fill body { height:100%; margin:0; overflow:hidden; background:#0a0a0c; }",
+      "html.guided-fill " + R + " { height:100%; min-height:0; }",
+      R + " { --bg-page:#0a0a0c; --bg:#000; --bar:#1c1c1e; --them:#262629; --me:#0a84ff; --text:#fff; --dim:#8e8e93; --soft:#aeaeb2; --chip:#2c2c2e; --chip-border:#3a3a3c; --field:#1c1c1e; --orange:#ff9f0a; --red:#ff453a; --green:#30d158;",
+      "  box-sizing:border-box; min-height:640px; height:100%; display:flex; flex-direction:column; background:var(--bg-page); color:var(--text); color-scheme:dark;",
+      "  font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text','Helvetica Neue',Helvetica,Arial,sans-serif; -webkit-font-smoothing:antialiased; }",
+      R + " * { box-sizing:border-box; }",
+      R + " button, " + R + " input, " + R + " select { font:inherit; color:inherit; }",
+      R + " [hidden] { display:none !important; }",
+      R + " .toolbar { display:flex; flex-wrap:wrap; gap:8px; align-items:center; justify-content:center; padding:8px 10px; background:var(--bar); border-bottom:1px solid rgba(84,84,88,.55); }",
+      R + " .toolbar label { display:flex; align-items:center; gap:6px; font-size:14px; color:var(--soft); }",
+      R + " .toolbar select { min-height:36px; background:var(--chip); border:1px solid var(--chip-border); border-radius:10px; padding:4px 8px; }",
+      R + " .toolbar select:disabled { opacity:.6; }",
+      R + " .modes { display:flex; background:var(--chip); border:1px solid var(--chip-border); border-radius:12px; padding:2px; gap:2px; }",
+      R + " .modes button { min-height:34px; background:transparent; border:0; border-radius:10px; padding:6px 12px; cursor:pointer; font-size:14px; font-weight:600; color:var(--soft); }",
+      R + " .modes button[aria-pressed='true'] { background:var(--me); color:#fff; }",
+      R + " .joinbar { display:flex; flex-wrap:wrap; gap:8px; align-items:center; justify-content:center; padding:8px 12px; background:var(--bar); }",
+      R + " .joinbar input { min-height:40px; background:var(--field); border:1px solid var(--chip-border); border-radius:12px; padding:8px 10px; font-size:16px; }",
+      R + " .joinbar input[data-role='join-code'] { width:7.5rem; letter-spacing:.15em; text-transform:uppercase; font-weight:700; }",
+      R + " .joinbar input[data-role='join-name'] { width:10rem; }",
+      R + " .joinbar button { min-height:40px; background:var(--me); color:#fff; border:0; border-radius:12px; padding:8px 14px; font-weight:700; cursor:pointer; }",
+      R + " .joinbar button.quiet { background:var(--chip); color:var(--text); border:1px solid var(--chip-border); }",
+      R + " .class-status { flex:1 1 100%; text-align:center; margin:0; font-size:14px; color:var(--soft); }",
+      R + " .stage { flex:1; min-height:0; display:flex; justify-content:center; align-items:stretch; gap:18px; padding:12px; }",
+      R + " .student { position:relative; flex:1 1 0; max-width:390px; min-height:0; display:flex; flex-direction:column; background:var(--bg); overflow:hidden; border-radius:44px; border:10px solid #1c1c1e; box-shadow:0 0 0 1px #2c2c2e, 0 20px 50px rgba(0,0,0,.72); }",
+      "@media (max-width:520px) { " + R + " .stage { padding:0; gap:0; flex-direction:column; } " + R + " .student { max-width:none; border:0; border-radius:0; box-shadow:none; } " + R + " .stage.both .student { border-top:1px solid #2c2c2e; } }",
+      R + " .status-bar { display:flex; justify-content:space-between; align-items:center; padding:8px 22px 0; height:30px; font-size:14px; font-weight:600; flex-shrink:0; }",
+      R + " .battery { width:24px; height:11px; border:1.5px solid #fff; border-radius:3px; position:relative; }",
+      R + " .battery::after { content:''; position:absolute; inset:1.5px; right:5px; background:#fff; border-radius:1px; }",
+      R + " .who { display:flex; flex-direction:column; align-items:center; gap:2px; padding:4px 12px 8px; background:rgba(28,28,30,.82); border-bottom:1px solid rgba(84,84,88,.55); flex-shrink:0; }",
+      R + " .avatar { width:40px; height:40px; border-radius:50%; display:grid; place-items:center; font-weight:600; font-size:15px; color:#fff; background:linear-gradient(145deg,#64d2ff,#007AFF); }",
+      R + " .student[data-student='B'] .avatar { background:linear-gradient(145deg,#30d158,#64d2ff); }",
+      R + " .who-name { font-size:12px; font-weight:500; }",
+      R + " .who-title { color:var(--dim); font-size:11px; }",
+      R + " .note { margin:0; color:var(--dim); padding:6px 14px; font-size:12px; line-height:1.35; text-align:center; }",
+      R + " .thread { flex:1; min-height:60px; overflow:auto; padding:8px 12px; display:flex; flex-direction:column; gap:6px; }",
+      R + " .empty { color:var(--dim); font-size:13px; text-align:center; margin:12px 8px; }",
+      R + " .bubble { max-width:78%; padding:8px 13px; border-radius:18px; font-size:16px; line-height:1.3; word-break:break-word; }",
+      R + " .bubble.me { align-self:flex-end; background:var(--me); color:#fff; border-bottom-right-radius:5px; }",
+      R + " .bubble.them { align-self:flex-start; background:var(--them); color:#fff; border-bottom-left-radius:5px; }",
+      R + " .bubble.pending { align-self:flex-end; background:transparent; color:var(--text); border:1.5px dashed var(--orange); border-bottom-right-radius:5px; }",
+      R + " .bubble .why { display:block; margin-top:5px; font-size:12px; font-weight:600; color:var(--orange); }",
+      R + " .prompt { margin:0; padding:6px 14px 0; font-size:14px; line-height:1.35; }",
+      R + " .prompt .step { color:var(--dim); }",
+      R + " .prompt .waiting { color:var(--orange); font-weight:600; }",
+      R + " .chips { display:flex; flex-wrap:wrap; gap:6px; padding:8px 12px; max-height:132px; overflow:auto; }",
+      R + " .chips:empty { display:none; }",
+      R + " .chips button, " + R + " .swap button { min-height:38px; border-radius:999px; border:1px solid var(--chip-border); background:var(--chip); color:#fff; font-weight:600; padding:7px 13px; cursor:pointer; font-size:15px; }",
+      R + " .chips button:active, " + R + " .swap button:active { background:#3a3a3c; }",
+      R + " .help { margin:0 12px 8px; background:#3a1d1b; color:#ffd7d4; border:1px solid #5c2a27; border-radius:14px; padding:8px 10px; max-height:150px; overflow:auto; font-size:14px; }",
+      R + " .help-lead { margin:0 0 6px; font-weight:700; }",
+      R + " .help-label { margin:0 0 4px; color:#ff9f8f; font-size:12px; font-weight:700; }",
+      R + " .swap { display:flex; align-items:center; gap:6px; margin:4px 0; }",
+      R + " .swap.match button { outline:2px solid var(--orange); }",
+      R + " .composer { display:flex; gap:8px; padding:8px 12px 14px; flex-shrink:0; }",
+      R + " .composer input { flex:1; min-width:0; border-radius:20px; border:1px solid var(--chip-border); background:var(--field); padding:9px 14px; font-size:16px; }",
+      R + " .composer input:focus { outline:0; border-color:var(--me); }",
+      R + " .composer button { background:var(--me); color:#fff; border:0; border-radius:20px; min-width:64px; min-height:40px; font-weight:700; cursor:pointer; }",
+      R + " button:focus-visible, " + R + " input:focus-visible, " + R + " select:focus-visible { outline:3px solid var(--orange); outline-offset:2px; }"
     ].join("\n");
     document.head.appendChild(style);
   }
 
-  function studentById(id) {
-    return state.students[id];
-  }
-
+  /* ---------- threads ---------- */
   function clearThread(student) {
     var thread = student.root.querySelector("[data-role='thread']");
     thread.textContent = "";
@@ -237,20 +204,17 @@
     student.step = 0;
     hideHelp(student);
   }
-
   function hideHelp(student) {
     var help = student.root.querySelector("[data-role='help']");
     help.hidden = true;
     help.textContent = "";
   }
-
   function scrollThread(student) {
     var thread = student.root.querySelector("[data-role='thread']");
     thread.scrollTop = thread.scrollHeight;
   }
-
   function addBubble(studentId, text, kind, pendingWhy) {
-    var student = studentById(studentId);
+    var student = state.students[studentId];
     if (!student) return;
     var thread = student.root.querySelector("[data-role='thread']");
     var empty = thread.querySelector("[data-role='empty']");
@@ -259,28 +223,19 @@
     bubble.className = "bubble " + (pendingWhy ? "pending" : kind);
     bubble.setAttribute("data-text", text);
     bubble.setAttribute("data-sent", pendingWhy ? "false" : "true");
-    var line = document.createElement("span");
-    line.className = "line";
-    line.textContent = text;
-    bubble.appendChild(line);
-    if (pendingWhy) {
-      var why = document.createElement("span");
-      why.className = "why";
-      why.textContent = pendingWhy;
-      bubble.appendChild(why);
-    }
+    bubble.appendChild(el("span", { class: "line", text: text }));
+    if (pendingWhy) bubble.appendChild(el("span", { class: "why", text: pendingWhy }));
     thread.appendChild(bubble);
     scrollThread(student);
   }
 
-  function shared() {
-    return state.both || !!(state.conn && state.conn.open);
+  /* ---------- turns ---------- */
+  function classPaired() {
+    var c = state.cls;
+    return !!(c && c.pairId && c.conn && c.conn.open);
   }
-
-  function stepOf(student) {
-    return shared() ? state.step : student.step;
-  }
-
+  function shared() { return state.both || classPaired(); }
+  function stepOf(student) { return shared() ? state.step : student.step; }
   function hasTurn(student) {
     if (!shared()) return true;
     var steps = state.convo.steps || [];
@@ -288,29 +243,28 @@
     var firstSpeaker = state.step % 2 === 0;
     if (state.both) return firstSpeaker ? student.id === "A" : student.id === "B";
     if (student.id !== "A") return false;
-    return firstSpeaker === (state.role === "host");
+    return firstSpeaker === (state.cls.role === "first");
   }
-
   function chipsFor(student) {
     var steps = state.convo.steps || [];
     var step = stepOf(student);
     if (step >= steps.length) {
       var seen = Object.create(null);
       var all = [];
-      steps.forEach(function (step) {
-        (step.chips || []).forEach(function (chip) {
-          if (!seen[chip]) {
-            seen[chip] = true;
-            all.push(chip);
-          }
-        });
+      steps.forEach(function (s) {
+        (s.chips || []).forEach(function (chip) { if (!seen[chip]) { seen[chip] = true; all.push(chip); } });
       });
       return all;
     }
     if (!hasTurn(student)) return [];
     return steps[step].chips || [];
   }
-
+  function whoLabel(student) {
+    if (state.mode === "class" && state.cls) {
+      return state.cls.partner ? state.cls.partner : (state.cls.name || "You");
+    }
+    return student.id === "A" ? "Student A" : "Student B";
+  }
   function renderChrome(student) {
     var steps = state.convo.steps || [];
     var prompt = student.root.querySelector("[data-role='prompt']");
@@ -318,7 +272,9 @@
     var step = stepOf(student);
     var turn = hasTurn(student);
     student.root.setAttribute("data-turn", turn ? "yes" : "no");
-    if (step >= steps.length) {
+    if (state.mode === "class" && !classPaired()) {
+      prompt.appendChild(el("span", { "data-role": "prompt-text", class: "waiting", text: state.cls && state.cls.joined ? "Waiting for the teacher to pair you." : "Join your teacher's class to start." }));
+    } else if (step >= steps.length) {
       prompt.appendChild(el("span", { "data-role": "prompt-text", text: FREE }));
     } else if (!turn) {
       prompt.appendChild(el("span", { class: "step", text: "Step " + (step + 1) + " of " + steps.length + ". " }));
@@ -329,76 +285,72 @@
     }
     var box = student.root.querySelector("[data-role='chips']");
     box.textContent = "";
-    chipsFor(student).forEach(function (chip) {
-      var btn = el("button", { type: "button", "data-chip": chip, text: chip });
-      box.appendChild(btn);
-    });
-    var title = student.root.querySelector("[data-role='title']");
-    if (title) title.textContent = state.convo.title || "";
+    if (!(state.mode === "class" && !classPaired())) {
+      chipsFor(student).forEach(function (chip) {
+        box.appendChild(el("button", { type: "button", "data-chip": chip, text: chip }));
+      });
+    }
+    var name = whoLabel(student);
+    student.root.querySelector("[data-role='who-name']").textContent = name;
+    student.root.querySelector("[data-role='avatar']").textContent = (name.charAt(0) || "?").toUpperCase();
+    student.root.querySelector("[data-role='title']").textContent = state.convo.title || "";
   }
-
   function renderAll() {
-    ["A", "B"].forEach(function (id) {
-      if (state.students[id]) renderChrome(state.students[id]);
-    });
+    ["A", "B"].forEach(function (id) { if (state.students[id]) renderChrome(state.students[id]); });
   }
-
-  function canCross() {
-    return shared();
-  }
-
-  function cross(fromId, canon) {
-    if (state.both) {
-      addBubble(fromId === "A" ? "B" : "A", canon, "them", null);
-      return;
-    }
-    if (state.conn && state.conn.open) {
-      try {
-        state.conn.send({ t: "line", text: canon, step: state.step });
-      } catch (err) {
-        setPeerStatus("The message did not go through. The connection failed. Use Try both sides on this computer.");
-      }
-    }
-  }
-
   function maybeAdvanceShared(student, canon) {
     var steps = state.convo.steps || [];
     if (state.step >= steps.length || !hasTurn(student)) return;
-    var chips = steps[state.step].chips || [];
-    if (chips.indexOf(canon) !== -1) state.step += 1;
+    if ((steps[state.step].chips || []).indexOf(canon) !== -1) state.step += 1;
   }
-
-  function resetConversation() {
-    state.step = 0;
-    ["A", "B"].forEach(function (id) {
-      if (state.students[id]) clearThread(state.students[id]);
-    });
-    renderAll();
-  }
-
   function maybeAdvance(student, canon) {
     var steps = state.convo.steps || [];
     if (student.step >= steps.length) return;
-    var chips = steps[student.step].chips || [];
-    if (chips.indexOf(canon) !== -1) student.step += 1;
+    if ((steps[student.step].chips || []).indexOf(canon) !== -1) student.step += 1;
+  }
+  function resetConversation() {
+    state.step = 0;
+    ["A", "B"].forEach(function (id) { if (state.students[id]) clearThread(state.students[id]); });
+    renderAll();
   }
 
+  /* ---------- sending ---------- */
+  function cross(fromId, line) {
+    if (state.both) {
+      addBubble(fromId === "A" ? "B" : "A", line, "them", null);
+      return;
+    }
+    if (classPaired()) {
+      classSend({
+        type: "line", pairId: state.cls.pairId, from: state.cls.name, text: line,
+        step: state.step, level: state.level, convoId: state.convo.id, at: Date.now()
+      });
+    }
+  }
+  function deliver(student, line, advanceWith) {
+    hideHelp(student);
+    if (shared()) {
+      addBubble(student.id, line, "me", null);
+      if (advanceWith) maybeAdvanceShared(student, advanceWith);
+      cross(student.id, line);
+      renderAll();
+    } else {
+      addBubble(student.id, line, "me", state.mode === "class" ? "You are not paired yet, so this stayed here." : NO_PARTNER);
+      if (advanceWith && state.mode !== "class") maybeAdvance(student, advanceWith);
+      renderChrome(student);
+    }
+  }
   function showSwapList(help, match) {
-    var label = el("p", { class: "help-label", text: "Known swaps" });
-    help.appendChild(label);
+    help.appendChild(el("p", { class: "help-label", text: "Known swaps" }));
     SWAPS.forEach(function (swap) {
       var row = el("div", { class: "swap" + (match && match.it === swap.it ? " match" : "") });
-      var words = swap.label.split(" -> ");
-      row.appendChild(el("span", { text: words[0] + " -> " }));
+      row.appendChild(el("span", { text: swap.label.split(" -> ")[0] + " -> " }));
       row.appendChild(el("button", { type: "button", "data-chip": swap.it, text: swap.it }));
       help.appendChild(row);
     });
   }
-
   function showEnglishHelp(student, raw, swap) {
-    var lead = swap
-      ? "Write it in Italian."
-      : "Write it in Italian. I do not have that phrase yet. Tap a phrase chip.";
+    var lead = swap ? "Write it in Italian." : "Write it in Italian. I do not have that phrase yet. Tap a phrase chip.";
     addBubble(student.id, raw, "me", lead);
     var help = student.root.querySelector("[data-role='help']");
     help.hidden = false;
@@ -407,7 +359,6 @@
     showSwapList(help, swap);
     scrollThread(student);
   }
-
   function showBlocked(student, raw) {
     addBubble(student.id, raw, "me", BLOCKED);
     var help = student.root.querySelector("[data-role='help']");
@@ -416,287 +367,248 @@
     help.appendChild(el("p", { class: "help-lead", text: BLOCKED }));
     scrollThread(student);
   }
-
-  function deliver(student, line, advanceWith) {
-    hideHelp(student);
-    if (canCross()) {
-      addBubble(student.id, line, "me", null);
-      if (advanceWith) maybeAdvanceShared(student, advanceWith);
-      cross(student.id, line);
-      renderAll();
-    } else {
-      addBubble(student.id, line, "me", NO_PARTNER);
-      if (advanceWith) maybeAdvance(student, advanceWith);
-      renderChrome(student);
-    }
-  }
-
   function attempt(student, raw) {
     var text = String(raw || "").trim();
     if (!text) return;
     var canon = canonical(text);
-    if (canon) {
-      deliver(student, canon, canon);
-      return;
-    }
+    if (canon) { deliver(student, canon, canon); return; }
     var swap = matchSwap(text);
-    if (swap || isEnglish(text)) {
-      showEnglishHelp(student, text, swap);
-      return;
-    }
-    if (isGibberish(text)) {
-      showBlocked(student, text);
-      return;
-    }
+    if (swap || isEnglish(text)) { showEnglishHelp(student, text, swap); return; }
+    if (isGibberish(text)) { showBlocked(student, text); return; }
     deliver(student, text, null);
   }
 
+  /* ---------- levels ---------- */
   function convosFor(level) {
     return state.conversations.filter(function (c) { return String(c.level) === String(level); });
   }
-
+  function syncLevelUi() {
+    var sel = q("[data-role='level']");
+    if (!sel) return;
+    if (sel.value !== state.level) sel.value = state.level;
+    sel.disabled = !!(state.mode === "class" && state.cls && state.cls.locked);
+  }
   function setLevel(level, fromRemote) {
     var list = convosFor(level);
     if (!list.length) return;
     state.level = String(level);
     state.convo = list[0];
     state.step = 0;
-    state.phraseMap = null;
     rebuildMap();
     var mount = document.getElementById("italian-guided-chat");
     if (mount) mount.setAttribute("data-level", state.level);
-    var levelSelect = document.querySelector("#italian-guided-chat [data-role='level']");
-    if (levelSelect && levelSelect.value !== state.level) levelSelect.value = state.level;
+    syncLevelUi();
     fillConversationSelect();
-    ["A", "B"].forEach(function (id) {
-      if (state.students[id]) clearThread(state.students[id]);
-    });
+    ["A", "B"].forEach(function (id) { if (state.students[id]) clearThread(state.students[id]); });
     renderAll();
-    if (!fromRemote && state.conn && state.conn.open && !state.both) {
-      try { state.conn.send({ t: "level", level: state.level }); } catch (err) {}
-    }
+    if (!fromRemote && classPaired()) classSend({ type: "level_change", pairId: state.cls.pairId, level: state.level });
   }
-
   function setConversation(id, fromRemote) {
     var found = null;
-    state.conversations.forEach(function (c) {
-      if (c.id === id) found = c;
-    });
+    state.conversations.forEach(function (c) { if (c.id === id) found = c; });
     if (!found) return;
     state.level = String(found.level);
     state.convo = found;
     state.step = 0;
-    state.phraseMap = null;
     rebuildMap();
-    var mount = document.getElementById("italian-guided-chat");
-    if (mount) mount.setAttribute("data-level", state.level);
-    ["A", "B"].forEach(function (sid) {
-      if (state.students[sid]) clearThread(state.students[sid]);
-    });
+    ["A", "B"].forEach(function (sid) { if (state.students[sid]) clearThread(state.students[sid]); });
     fillConversationSelect();
     renderAll();
-    if (!fromRemote && state.conn && state.conn.open && !state.both) {
-      try { state.conn.send({ t: "convo", id: found.id }); } catch (err) {}
-    }
+    if (!fromRemote && classPaired()) classSend({ type: "convo_change", pairId: state.cls.pairId, id: found.id });
   }
-
   function fillConversationSelect() {
-    var select = document.querySelector("#italian-guided-chat [data-role='conversation']");
-    var wrap = document.querySelector("#italian-guided-chat [data-role='conversation-wrap']");
+    var select = q("[data-role='conversation']");
+    var wrap = q("[data-role='conversation-wrap']");
     if (!select || !wrap) return;
     var list = convosFor(state.level);
     select.textContent = "";
     list.forEach(function (c) {
-      var opt = document.createElement("option");
-      opt.value = c.id;
-      opt.textContent = c.title;
+      var opt = el("option", { value: c.id, text: c.title });
       if (state.convo && c.id === state.convo.id) opt.selected = true;
       select.appendChild(opt);
     });
     wrap.hidden = list.length < 2;
+    select.disabled = !!(state.mode === "class" && state.cls && state.cls.locked);
   }
 
-  function setPeerStatus(text) {
-    var node = document.querySelector("#italian-guided-chat [data-role='peer-status']");
+  /* ---------- Join class (teacher hub over PeerJS) ---------- */
+  function teacherPeerId(code) { return "igc-" + String(code || "").toUpperCase().replace(/[^A-Z0-9]/g, ""); }
+  function studentId() {
+    var key = "italianGuidedStudentId";
+    var id = null;
+    try { id = sessionStorage.getItem(key); } catch (e) {}
+    if (!id) {
+      id = Math.random().toString(36).slice(2, 10);
+      try { sessionStorage.setItem(key, id); } catch (e) {}
+    }
+    return id;
+  }
+  function setClassStatus(text) {
+    var node = q("[data-role='class-status']");
     if (node) node.textContent = text;
   }
-
-  function clearPeerTimer() {
-    if (state.peerTimer) {
-      clearTimeout(state.peerTimer);
-      state.peerTimer = null;
-    }
+  function classSend(msg) {
+    var c = state.cls;
+    if (!c || !c.conn || !c.conn.open) return false;
+    try { c.conn.send(msg); return true; } catch (e) { setClassStatus(CLASS_FAIL); return false; }
   }
-
-  function stopPeer() {
-    clearPeerTimer();
-    if (state.conn) {
-      try { state.conn.close(); } catch (err) {}
-      state.conn = null;
+  window.addEventListener("pagehide", function () {
+    var c = state.cls;
+    if (c && c.peer) { try { c.peer.destroy(); } catch (e) {} }
+  });
+  function leaveClass(silent) {
+    var c = state.cls;
+    if (c) {
+      if (c.timer) clearTimeout(c.timer);
+      if (c.conn) { try { c.conn.close(); } catch (e) {} }
+      if (c.peer) { try { c.peer.destroy(); } catch (e) {} }
     }
-    if (state.peer) {
-      try { state.peer.destroy(); } catch (err) {}
-      state.peer = null;
-    }
+    state.cls = null;
+    var leave = q("[data-role='leave-class']");
+    var join = q("[data-role='join-class']");
+    if (leave) leave.hidden = true;
+    if (join) join.hidden = false;
+    if (!silent) setClassStatus("You left the class.");
+    syncLevelUi();
+    fillConversationSelect();
+    resetConversation();
   }
-
-  function onRemote(data) {
-    if (!data || typeof data !== "object" || state.both) return;
-    if (data.t === "line") {
+  function onTeacherMsg(data) {
+    var c = state.cls;
+    if (!c || !data || typeof data !== "object") return;
+    if (data.type === "welcome") {
+      c.joined = true;
+      c.className = String(data.className || "your class");
+      c.locked = !!data.locked;
+      if (data.level && convosFor(data.level).length && String(data.level) !== state.level) setLevel(String(data.level), true);
+      syncLevelUi();
+      setClassStatus("You joined " + c.className + ". Waiting for the teacher to pair you.");
+      renderAll();
+      return;
+    }
+    if (data.type === "paired") {
+      c.pairId = String(data.pairId);
+      c.partner = String((data.partner && data.partner.name) || "Partner");
+      c.role = data.role === "first" ? "first" : "second";
+      c.locked = !!data.locked;
+      setLevel(data.level && convosFor(data.level).length ? String(data.level) : state.level, true);
+      if (data.convoId && data.convoId !== state.convo.id) setConversation(String(data.convoId), true);
+      if (typeof data.step === "number" && data.step >= 0 && data.step <= (state.convo.steps || []).length) state.step = data.step;
+      syncLevelUi();
+      fillConversationSelect();
+      setClassStatus("You are paired with " + c.partner + ". " + (c.role === "first" ? "You start." : c.partner + " starts."));
+      renderAll();
+      return;
+    }
+    if (data.type === "unpaired") {
+      c.pairId = null; c.partner = null; c.role = null;
+      setClassStatus("The teacher changed pairs. Waiting for the teacher to pair you.");
+      resetConversation();
+      return;
+    }
+    if (data.type === "partner_status") {
+      if (c.partner) setClassStatus(data.online ? c.partner + " is back." : c.partner + " disconnected. Wait for them, or ask your teacher.");
+      return;
+    }
+    if (data.type === "line") {
+      if (!c.pairId || String(data.pairId) !== c.pairId) return;
       var clean = canonical(data.text);
       var line = clean || String(data.text || "").trim();
       if (!line || isEnglish(line) || isGibberish(line)) return;
       addBubble("A", line, "them", null);
       var total = (state.convo.steps || []).length;
-      if (typeof data.step === "number" && data.step % 1 === 0 && data.step >= 0 && data.step <= total) {
-        state.step = data.step;
-      }
+      if (typeof data.step === "number" && data.step % 1 === 0 && data.step >= 0 && data.step <= total) state.step = data.step;
       renderAll();
       return;
     }
-    if (data.t === "convo" && data.id && (!state.convo || data.id !== state.convo.id)) {
-      setConversation(String(data.id), true);
+    if (data.type === "level") {
+      if (typeof data.locked === "boolean") c.locked = data.locked;
+      if (data.level && convosFor(data.level).length) setLevel(String(data.level), true);
+      syncLevelUi();
+      fillConversationSelect();
       return;
     }
-    if (data.t === "level" && data.level && String(data.level) !== state.level) {
-      setLevel(String(data.level), true);
+    if (data.type === "convo" && data.id) { setConversation(String(data.id), true); return; }
+    if (data.type === "ended") {
+      leaveClass(true);
+      setClassStatus("Your teacher ended the class session.");
     }
   }
-
-  function bindConn(conn, isHost) {
-    state.conn = conn;
-    conn.on("open", function () {
-      clearPeerTimer();
-      setPeerStatus("Connected. Your partner only sees Italian that passed the check.");
-      resetConversation();
-      if (isHost) {
-        try {
-          conn.send({ t: "level", level: state.level });
-          if (state.convo) conn.send({ t: "convo", id: state.convo.id });
-        } catch (err) {}
-      }
-    });
-    conn.on("data", onRemote);
-    conn.on("error", function () {
-      clearPeerTimer();
-      setPeerStatus("The connection failed. Try both sides still works on this computer.");
-    });
-    conn.on("close", function () {
-      if (state.conn === conn) state.conn = null;
-      setPeerStatus("The partner disconnected. Try both sides still works on this computer.");
-      renderAll();
-    });
-  }
-
-  function peerMissing() {
-    setPeerStatus("The connection tool did not load. Use Try both sides on this computer.");
-  }
-
-  function armTimer() {
-    clearPeerTimer();
-    state.peerTimer = setTimeout(function () {
-      if (!state.conn || !state.conn.open) {
-        setPeerStatus("Could not connect. Check the 4-letter code and the network, or use Try both sides.");
-      }
-    }, 8000);
-  }
-
-  function showCode(code) {
-    var node = document.querySelector("#italian-guided-chat [data-role='room-code']");
-    if (node) node.textContent = code;
-  }
-
-  function createRoom() {
-    if (typeof Peer !== "function") return peerMissing();
-    stopPeer();
-    state.role = "host";
-    var letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
-    var code = "";
-    for (var i = 0; i < 4; i++) code += letters.charAt(Math.floor(Math.random() * letters.length));
-    showCode(code);
-    armTimer();
+  function joinClass() {
+    var codeIn = q("[data-role='join-code']");
+    var nameIn = q("[data-role='join-name']");
+    var code = String(codeIn.value || "").toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 6);
+    var name = String(nameIn.value || "").trim().split(/\s+/)[0] || "";
+    name = name.slice(0, 18);
+    if (code.length !== 6) { setClassStatus("Enter the 6-character class code from your teacher."); return; }
+    if (!name) { setClassStatus("Enter your first name."); return; }
+    if (typeof Peer !== "function") { setClassStatus("The connection tool did not load. " + CLASS_FAIL); return; }
+    leaveClass(true);
+    var sid = studentId();
+    var c = state.cls = { code: code, name: name, sid: sid, peer: null, conn: null, joined: false, pairId: null, partner: null, role: null, locked: false, timer: null };
+    setClassStatus("Connecting to class " + code + "…");
+    q("[data-role='join-class']").hidden = true;
+    q("[data-role='leave-class']").hidden = false;
+    var fail = function () {
+      if (state.cls !== c) return;
+      if (c.timer) { clearTimeout(c.timer); c.timer = null; }
+      setClassStatus(CLASS_FAIL);
+      q("[data-role='join-class']").hidden = false;
+    };
+    c.timer = setTimeout(function () { if (!c.joined) fail(); }, 12000);
     try {
-      state.peer = new Peer("itguided" + code.toLowerCase(), { debug: 0 });
-    } catch (err) {
-      clearPeerTimer();
-      setPeerStatus("Could not start the room. Use Try both sides on this computer.");
-      return;
-    }
-    state.peer.on("open", function () {
-      clearPeerTimer();
-      setPeerStatus("Room " + code + " is open. Your partner types this code on their computer.");
-    });
-    state.peer.on("connection", function (conn) { bindConn(conn, true); });
-    state.peer.on("error", function () {
-      clearPeerTimer();
-      setPeerStatus("Could not connect to the room. Check the network, or use Try both sides on this computer.");
-    });
-  }
-
-  function joinRoom(raw) {
-    var code = String(raw || "").toUpperCase().replace(/[^A-Z]/g, "").slice(0, 4);
-    if (code.length !== 4) {
-      setPeerStatus("Enter the 4-letter room code.");
-      return;
-    }
-    if (typeof Peer !== "function") return peerMissing();
-    stopPeer();
-    state.role = "guest";
-    showCode(code);
-    armTimer();
-    try {
-      state.peer = new Peer({ debug: 0 });
-    } catch (err) {
-      clearPeerTimer();
-      setPeerStatus("Could not connect. Use Try both sides on this computer.");
-      return;
-    }
-    state.peer.on("open", function () {
+      c.peer = new Peer(teacherPeerId(code) + "-s-" + sid, { debug: 0 });
+    } catch (e) { fail(); return; }
+    c.peer.on("open", function () {
       var conn;
-      try {
-        conn = state.peer.connect("itguided" + code.toLowerCase(), { reliable: true });
-      } catch (err) {
-        clearPeerTimer();
-        setPeerStatus("Could not connect. Check the 4-letter code and the network, or use Try both sides.");
-        return;
-      }
-      bindConn(conn, false);
+      try { conn = c.peer.connect(teacherPeerId(code), { reliable: true, metadata: { studentId: sid } }); } catch (e) { fail(); return; }
+      c.conn = conn;
+      conn.on("open", function () {
+        try { conn.send({ type: "join", name: name, studentId: sid }); } catch (e) { fail(); }
+      });
+      conn.on("data", onTeacherMsg);
+      conn.on("close", function () {
+        if (state.cls !== c) return;
+        c.pairId = null;
+        setClassStatus("Lost the connection to your teacher. Join again, or use Try both sides.");
+        q("[data-role='join-class']").hidden = false;
+        renderAll();
+      });
+      conn.on("error", fail);
     });
-    state.peer.on("error", function () {
-      clearPeerTimer();
-      setPeerStatus("Could not connect. Check the 4-letter code and the network, or use Try both sides.");
-    });
+    c.peer.on("error", fail);
+    renderAll();
   }
 
-  function setBoth(on) {
-    state.both = !!on;
-    var stage = document.querySelector("#italian-guided-chat [data-role='stage']");
-    var button = document.querySelector("#italian-guided-chat [data-role='try-both']");
-    var b = state.students.B.root;
-    if (state.both) {
-      stage.classList.add("both");
-      b.hidden = false;
-      button.setAttribute("aria-pressed", "true");
-      button.textContent = "One student";
-    } else {
-      stage.classList.remove("both");
-      b.hidden = true;
-      button.setAttribute("aria-pressed", "false");
-      button.textContent = "Try both sides";
-    }
+  /* ---------- modes ---------- */
+  function setMode(mode) {
+    if (mode === "class" && !state.standalone) mode = "solo";
+    if (state.mode === "class" && mode !== "class") leaveClass(true);
+    state.mode = mode;
+    state.both = mode === "both";
+    var stage = q("[data-role='stage']");
+    stage.classList.toggle("both", state.both);
+    state.students.B.root.hidden = !state.both;
+    Array.prototype.forEach.call(document.querySelectorAll("#italian-guided-chat .modes button"), function (b) {
+      b.setAttribute("aria-pressed", b.getAttribute("data-mode") === mode ? "true" : "false");
+    });
+    var joinbar = q("[data-role='joinbar']");
+    if (joinbar) joinbar.hidden = mode !== "class";
+    syncLevelUi();
+    fillConversationSelect();
     resetConversation();
   }
 
-  function makeStudent(id, name) {
+  function makeStudent(id) {
     var thread = el("div", { class: "thread", "data-role": "thread" });
-    thread.appendChild(el("p", { class: "empty", "data-role": "empty", text: "No messages yet." }));
+    var now = new Date();
+    var clock = now.getHours() + ":" + String(now.getMinutes()).padStart(2, "0");
     var root = el("section", { class: "student", "data-student": id },
+      el("div", { class: "status-bar", "aria-hidden": "true" }, el("span", { text: clock }), el("span", { class: "battery" })),
       el("div", { class: "who" },
-        el("div", { class: "avatar", text: id }),
-        el("div", {},
-          el("div", { class: "who-name", text: name }),
-          el("div", { class: "who-title", "data-role": "title", text: "" })
-        )
+        el("div", { class: "avatar", "data-role": "avatar", text: id }),
+        el("div", { class: "who-name", "data-role": "who-name", text: "" }),
+        el("div", { class: "who-title", "data-role": "title", text: "" })
       ),
       el("p", { class: "note", "data-role": "note", text: NOTE }),
       thread,
@@ -704,22 +616,13 @@
       el("div", { class: "chips", "data-role": "chips" }),
       el("div", { class: "help", "data-role": "help" }),
       el("form", { class: "composer", "data-role": "form" },
-        el("input", {
-          "data-role": "composer",
-          type: "text",
-          placeholder: "Type Italian",
-          autocomplete: "off",
-          autocorrect: "off",
-          autocapitalize: "off",
-          spellcheck: "false",
-          "aria-label": "Type a phrase"
-        }),
+        el("input", { "data-role": "composer", type: "text", placeholder: "Messaggio in italiano", autocomplete: "off", autocorrect: "off", autocapitalize: "off", spellcheck: "false", "aria-label": "Type a message in Italian" }),
         el("button", { "data-role": "send", type: "submit", text: "Send" })
       )
     );
-    var help = root.querySelector("[data-role='help']");
-    help.hidden = true;
+    root.querySelector("[data-role='help']").hidden = true;
     var student = { id: id, step: 0, root: root };
+    clearThread(student);
     root.addEventListener("click", function (event) {
       var btn = event.target.closest("button[data-chip]");
       if (!btn || !root.contains(btn)) return;
@@ -739,105 +642,92 @@
     var list = data && data.conversations ? data.conversations : (Array.isArray(data) ? data : []);
     state.conversations = list;
     list.forEach(function (convo) {
-      (convo.steps || []).forEach(function (step) {
-        (step.chips || []).forEach(learnPhrase);
-      });
+      (convo.steps || []).forEach(function (step) { (step.chips || []).forEach(learnPhrase); });
     });
     SWAPS.forEach(function (swap) { learnPhrase(swap.it); });
-
     var levels = [];
-    list.forEach(function (convo) {
-      var level = String(convo.level);
-      if (levels.indexOf(level) < 0) levels.push(level);
-    });
+    list.forEach(function (convo) { var l = String(convo.level); if (levels.indexOf(l) < 0) levels.push(l); });
     levels.sort(function (a, b) {
-      var ia = LEVEL_ORDER.indexOf(a);
-      var ib = LEVEL_ORDER.indexOf(b);
-      if (ia < 0) ia = 50;
-      if (ib < 0) ib = 50;
-      if (ia !== ib) return ia - ib;
-      return a < b ? -1 : 1;
+      var ia = LEVEL_ORDER.indexOf(a), ib = LEVEL_ORDER.indexOf(b);
+      if (ia < 0) ia = 50; if (ib < 0) ib = 50;
+      return ia !== ib ? ia - ib : (a < b ? -1 : 1);
     });
 
     mount.textContent = "";
     var levelSelect = el("select", { "data-role": "level", "aria-label": "Level" });
-    levels.forEach(function (level) {
-      var opt = document.createElement("option");
-      opt.value = level;
-      opt.textContent = "Level " + level;
-      levelSelect.appendChild(opt);
-    });
+    levels.forEach(function (level) { levelSelect.appendChild(el("option", { value: level, text: "Level " + level })); });
     var convoSelect = el("select", { "data-role": "conversation", "aria-label": "Conversation" });
     var convoWrap = el("label", { "data-role": "conversation-wrap", text: "Conversation " }, convoSelect);
     convoWrap.hidden = true;
-    var tryBtn = el("button", { type: "button", "data-role": "try-both", text: "Try both sides" });
-    tryBtn.setAttribute("aria-pressed", "false");
-    var roomBtn = el("button", { type: "button", "data-role": "share-room", text: "Share a room" });
-    var toolbar = el("div", { class: "toolbar" },
-      el("label", { text: "Level " }, levelSelect),
-      convoWrap,
-      tryBtn,
-      roomBtn
+    var modes = el("div", { class: "modes", role: "group", "aria-label": "Mode" },
+      el("button", { type: "button", "data-mode": "solo", "data-role": "mode-solo", text: "Practice alone" }),
+      el("button", { type: "button", "data-mode": "both", "data-role": "try-both", text: "Try both sides" }),
+      state.standalone ? el("button", { type: "button", "data-mode": "class", "data-role": "mode-class", text: "Join class" }) : null
     );
-    var room = el("div", { class: "room", "data-role": "room" },
-      el("button", { type: "button", "data-role": "create-room", text: "Create a room" }),
-      el("div", { class: "code", "data-role": "room-code", text: "----" }),
-      el("input", {
-        "data-role": "join-code",
-        type: "text",
-        maxlength: "4",
-        placeholder: "CODE",
-        "aria-label": "4-letter room code",
-        autocomplete: "off"
-      }),
-      el("button", { type: "button", "data-role": "join-room", text: "Join" }),
-      el("p", { class: "peer-status", "data-role": "peer-status", text: "Or use Try both sides on this computer." })
-    );
-    room.hidden = true;
+    var toolbar = el("div", { class: "toolbar" }, el("label", { text: "Level " }, levelSelect), convoWrap, modes);
+    mount.appendChild(toolbar);
+    if (state.standalone) {
+      var joinbar = el("div", { class: "joinbar", "data-role": "joinbar" },
+        el("input", { "data-role": "join-code", type: "text", maxlength: "6", placeholder: "CODE", "aria-label": "Class code", autocomplete: "off", autocapitalize: "characters", spellcheck: "false" }),
+        el("input", { "data-role": "join-name", type: "text", maxlength: "18", placeholder: "First name", "aria-label": "First name", autocomplete: "given-name" }),
+        el("button", { type: "button", "data-role": "join-class", text: "Join" }),
+        el("button", { type: "button", class: "quiet", "data-role": "leave-class", text: "Leave class" }),
+        el("p", { class: "class-status", "data-role": "class-status", text: "Enter the class code from your teacher and your first name." })
+      );
+      joinbar.hidden = true;
+      joinbar.querySelector("[data-role='leave-class']").hidden = true;
+      mount.appendChild(joinbar);
+      joinbar.querySelector("[data-role='join-class']").addEventListener("click", joinClass);
+      joinbar.querySelector("[data-role='leave-class']").addEventListener("click", function () { leaveClass(false); });
+      joinbar.querySelector("[data-role='join-name']").addEventListener("keydown", function (e) { if (e.key === "Enter") joinClass(); });
+    }
     var stage = el("div", { class: "stage", "data-role": "stage" });
-    state.students.A = makeStudent("A", "Student A");
-    state.students.B = makeStudent("B", "Student B");
+    state.students.A = makeStudent("A");
+    state.students.B = makeStudent("B");
     state.students.B.root.hidden = true;
     stage.appendChild(state.students.A.root);
     stage.appendChild(state.students.B.root);
-    mount.appendChild(toolbar);
-    mount.appendChild(room);
     mount.appendChild(stage);
 
     var wanted = mount.getAttribute("data-level") || "1";
     if (!convosFor(wanted).length) wanted = levels[0] || "1";
     levelSelect.value = wanted;
     setLevel(wanted, true);
+    setMode("solo");
 
     levelSelect.addEventListener("change", function () { setLevel(levelSelect.value, false); });
-    convoSelect.addEventListener("change", function () { setConversation(convoSelect.value); });
-    tryBtn.addEventListener("click", function () { setBoth(!state.both); });
-    roomBtn.addEventListener("click", function () { room.hidden = !room.hidden; });
-    room.querySelector("[data-role='create-room']").addEventListener("click", createRoom);
-    room.querySelector("[data-role='join-room']").addEventListener("click", function () {
-      joinRoom(room.querySelector("[data-role='join-code']").value);
+    convoSelect.addEventListener("change", function () { setConversation(convoSelect.value, false); });
+    modes.addEventListener("click", function (e) {
+      var b = e.target.closest("button[data-mode]");
+      if (b) setMode(b.getAttribute("data-mode"));
     });
+
+    if (state.standalone) {
+      var params = new URLSearchParams(location.search);
+      var code = (params.get("join") || params.get("code") || "").toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 6);
+      if (code) {
+        setMode("class");
+        q("[data-role='join-code']").value = code;
+        q("[data-role='join-name']").focus();
+      }
+    }
   }
 
   function start(mount) {
     var only = true;
     Array.prototype.forEach.call(document.body.children, function (node) {
-      if (node === mount || node.tagName === "SCRIPT" || node.tagName === "LINK") return;
+      if (node === mount || node.tagName === "SCRIPT" || node.tagName === "LINK" || node.tagName === "STYLE") return;
       only = false;
     });
+    state.standalone = only || mount.getAttribute("data-class") === "on";
     if (only) {
       document.documentElement.classList.add("guided-fill");
       document.body.classList.add("guided-fill");
     }
     fetch(new URL("conversations.json", base).href, { cache: "no-store" })
-      .then(function (res) {
-        if (!res.ok) throw new Error("conversations");
-        return res.json();
-      })
+      .then(function (res) { if (!res.ok) throw new Error("conversations"); return res.json(); })
       .then(function (data) { build(mount, data); })
-      .catch(function () {
-        mount.textContent = "The conversation list did not load.";
-      });
+      .catch(function () { mount.textContent = "The conversation list did not load."; });
   }
 
   function boot() {
@@ -845,10 +735,7 @@
     var mount = document.getElementById("italian-guided-chat");
     if (!mount) return;
     var go = function () { start(mount); };
-    if (typeof Peer === "function") {
-      go();
-      return;
-    }
+    if (typeof Peer === "function") { go(); return; }
     var tag = document.createElement("script");
     tag.src = new URL("vendor/peerjs.min.js", base).href;
     tag.onload = go;
@@ -856,9 +743,6 @@
     document.head.appendChild(tag);
   }
 
-  if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", boot);
-  } else {
-    boot();
-  }
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", boot);
+  else boot();
 })();

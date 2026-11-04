@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Italian guided chat · Teacher</title>
+<link rel="icon" href="favicon.ico">
+<style>
+  :root { --bg:#0a0a0c; --card:#1c1c1e; --line:#3a3a3c; --chip:#2c2c2e; --text:#fff; --dim:#8e8e93; --soft:#aeaeb2; --blue:#0a84ff; --green:#30d158; --red:#ff453a; --orange:#ff9f0a; --them:#262629; color-scheme:dark; }
+  * { box-sizing:border-box; }
+  [hidden] { display:none !important; }
+  body { margin:0; background:var(--bg); color:var(--text); font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Helvetica Neue",Helvetica,Arial,sans-serif; -webkit-font-smoothing:antialiased; }
+  header { display:flex; flex-wrap:wrap; gap:10px; align-items:center; justify-content:space-between; padding:14px 20px; background:var(--card); border-bottom:1px solid var(--line); }
+  header h1 { margin:0; font-size:20px; }
+  header p { margin:2px 0 0; color:var(--dim); font-size:13px; }
+  a.btn, button { font:inherit; color:inherit; min-height:40px; border-radius:12px; border:1px solid var(--line); background:var(--chip); padding:8px 14px; cursor:pointer; text-decoration:none; display:inline-flex; align-items:center; gap:6px; }
+  button.primary { background:var(--blue); border-color:var(--blue); color:#fff; font-weight:700; }
+  button.good { background:var(--green); border-color:var(--green); color:#04140a; font-weight:700; }
+  button.danger { background:transparent; border-color:var(--red); color:var(--red); font-weight:700; }
+  button:disabled { opacity:.45; cursor:default; }
+  button:focus-visible, input:focus-visible, select:focus-visible, a:focus-visible { outline:3px solid var(--orange); outline-offset:2px; }
+  main { max-width:1180px; margin:0 auto; padding:18px; display:grid; gap:16px; }
+  .grid { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+  @media (max-width:820px) { .grid { grid-template-columns:1fr; } }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:20px; padding:16px; }
+  .card h2 { margin:0 0 10px; font-size:17px; }
+  .muted { color:var(--dim); font-size:14px; margin:6px 0 0; }
+  .row { display:flex; flex-wrap:wrap; gap:10px; align-items:end; }
+  label.field { display:flex; flex-direction:column; gap:4px; font-size:13px; color:var(--soft); flex:1 1 160px; }
+  label.check { display:flex; align-items:center; gap:8px; font-size:14px; color:var(--soft); min-height:40px; }
+  input, select { font:inherit; color:var(--text); background:#000; border:1px solid var(--line); border-radius:12px; min-height:40px; padding:8px 10px; }
+  .code-big { font-size:44px; font-weight:800; letter-spacing:.2em; text-align:center; margin:12px 0 6px; }
+  .url { text-align:center; word-break:break-all; font-size:14px; }
+  .url a { color:var(--blue); }
+  .pill { display:inline-block; padding:4px 10px; border-radius:999px; font-size:13px; font-weight:700; }
+  .pill.live { background:rgba(48,209,88,.15); color:var(--green); }
+  .pill.off { background:rgba(255,69,58,.15); color:var(--red); }
+  .help { background:#3a1d1b; border:1px solid #5c2a27; color:#ffd7d4; border-radius:14px; padding:10px 12px; font-size:14px; margin-top:10px; }
+  .roster { display:flex; flex-wrap:wrap; gap:8px; }
+  .stu { border-radius:999px; padding:6px 12px 6px 6px; min-height:40px; }
+  .stu .av { width:28px; height:28px; border-radius:50%; display:grid; place-items:center; background:linear-gradient(145deg,#64d2ff,#007AFF); font-weight:700; font-size:13px; color:#fff; }
+  .stu.paired .av { background:linear-gradient(145deg,#30d158,#64d2ff); }
+  .stu.offline { opacity:.5; }
+  .stu[aria-pressed="true"] { border-color:var(--orange); box-shadow:0 0 0 2px var(--orange); }
+  .stu small { color:var(--dim); }
+  .empty { color:var(--dim); font-size:14px; }
+  .pairs { display:grid; grid-template-columns:repeat(auto-fill,minmax(340px,1fr)); gap:14px; }
+  .pair { background:#000; border:1px solid var(--line); border-radius:22px; display:flex; flex-direction:column; overflow:hidden; }
+  .pair-head { padding:10px 14px; border-bottom:1px solid var(--line); background:rgba(28,28,30,.82); }
+  .pair-names { font-weight:700; display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+  .dot { width:9px; height:9px; border-radius:50%; display:inline-block; background:var(--red); }
+  .dot.on { background:var(--green); }
+  .pair-step { color:var(--soft); font-size:13px; margin-top:4px; }
+  .pair-step b { color:var(--orange); font-weight:600; }
+  .tx { padding:10px 12px; display:flex; flex-direction:column; gap:6px; max-height:300px; min-height:120px; overflow:auto; }
+  .tx .line { max-width:80%; padding:7px 12px; border-radius:18px; font-size:15px; line-height:1.3; word-break:break-word; }
+  .tx .line.a { align-self:flex-start; background:var(--them); border-bottom-left-radius:5px; }
+  .tx .line.b { align-self:flex-end; background:var(--blue); border-bottom-right-radius:5px; }
+  .tx .meta { display:block; font-size:11px; color:rgba(255,255,255,.65); margin-bottom:2px; }
+  .pair-foot { padding:8px 12px; border-top:1px solid var(--line); display:flex; justify-content:flex-end; }
+  .toast { position:fixed; left:50%; bottom:20px; transform:translateX(-50%); background:rgba(44,44,46,.96); padding:10px 16px; border-radius:14px; font-size:14px; opacity:0; transition:opacity .2s; pointer-events:none; }
+  .toast.show { opacity:1; }
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1>Italian guided chat · Teacher</h1>
+    <p>Class hub · no student logins · students see Italian only</p>
+  </div>
+  <a class="btn" href="./" target="_blank" rel="noopener">Open student page</a>
+</header>
+<main>
+  <div class="grid">
+    <section class="card">
+      <h2>1. Start a class session</h2>
+      <p class="muted">Keep this page open on your laptop or Chromebook. Students join from their own device with the code.</p>
+      <div class="row" style="margin-top:12px">
+        <label class="field">Class name<input id="className" maxlength="40" placeholder="Italian 2, Period 3"></label>
+        <label class="field">Teacher PIN (optional, to reopen)<input id="pin" maxlength="8" inputmode="numeric" placeholder="4–8 digits"></label>
+      </div>
+      <div class="row" style="margin-top:10px">
+        <label class="field">Level for this session
+          <select id="levelSel"><option value="1">Level 1</option><option value="2">Level 2</option><option value="3">Level 3</option><option value="4">Level 4</option><option value="AP">Level AP</option></select>
+        </label>
+        <label class="check"><input type="checkbox" id="lockLevel" checked> Lock level (students cannot change it)</label>
+      </div>
+      <div class="row" style="margin-top:12px">
+        <button type="button" class="primary" id="btnCreate">Create session</button>
+        <button type="button" class="danger" id="btnEnd" disabled>End session</button>
+      </div>
+      <div class="row" id="reopenRow" style="margin-top:10px" hidden>
+        <label class="field">PIN for last session<input id="reopenPin" maxlength="8" inputmode="numeric"></label>
+        <button type="button" id="btnReopen">Reopen last session</button>
+      </div>
+      <div id="sessionBlock" hidden>
+        <div class="code-big" id="joinCode">------</div>
+        <div class="row" style="justify-content:center"><span class="pill off" id="hubStatus">Offline</span><button type="button" id="btnCopyLink">Copy student link</button></div>
+        <p class="url">Students open: <a id="joinUrl" href="#" target="_blank" rel="noopener"></a></p>
+      </div>
+      <div class="help" id="hubHelp" hidden>The class hub could not start. School Wi‑Fi may block the connection tool. Try another network, or have students use <b>Try both sides</b> on one computer.</div>
+    </section>
+
+    <section class="card">
+      <h2>2. Roster &amp; pairing</h2>
+      <div class="row" style="margin-bottom:12px">
+        <button type="button" class="good" id="btnAutoPair" disabled>Auto-pair</button>
+        <span class="muted" id="rosterCount">0 students</span>
+      </div>
+      <div class="roster" id="roster"><div class="empty">Waiting for students…</div></div>
+      <p class="muted">Tap two unpaired students to pair them, or use Auto-pair. The first name in a pair starts.</p>
+    </section>
+  </div>
+
+  <section class="card">
+    <h2>3. Live pairs · what was sent</h2>
+    <p class="muted" style="margin:-4px 0 12px">Only lines that reached the partner appear here. English and practice mistakes stay on the student's screen.</p>
+    <div class="pairs" id="pairs"><div class="empty">No pairs yet</div></div>
+  </section>
+</main>
+<div class="toast" id="toast" role="status"></div>
+
+<script src="vendor/peerjs.min.js"></script>
+<script>
+(function () {
+  'use strict';
+  var STORAGE = 'italianGuidedTeacher_v1';
+  var $ = function (id) { return document.getElementById(id); };
+  var session = null;   // { code, className, pin, level, locked, students{}, pairs{}, pairOrder[], createdAt }
+  var peer = null;
+  var conns = {};
+  var picked = [];
+  var oldPeer = null;
+  var convos = [];
+
+  fetch('conversations.json', { cache: 'no-store' }).then(function (r) { return r.json(); })
+    .then(function (d) { convos = (d && d.conversations) || []; renderPairs(); }).catch(function () {});
+
+  function toast(t) { var e = $('toast'); e.textContent = t; e.classList.add('show'); clearTimeout(toast.t); toast.t = setTimeout(function () { e.classList.remove('show'); }, 2200); }
+  function makeCode() { var c = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789', o = ''; for (var i = 0; i < 6; i++) o += c.charAt(Math.floor(Math.random() * c.length)); return o; }
+  function teacherPeerId(code) { return 'igc-' + String(code).toUpperCase().replace(/[^A-Z0-9]/g, ''); }
+  function send(sid, msg) { var c = conns[sid]; try { if (c && c.open) c.send(msg); } catch (e) {} }
+  function el(tag, cls, text) { var n = document.createElement(tag); if (cls) n.className = cls; if (text != null) n.textContent = text; return n; }
+  function convoFor(pair) {
+    var id = pair.convoId, lvl = String(pair.level || session.level), found = null;
+    convos.forEach(function (c) { if (id && c.id === id) found = c; });
+    if (!found) convos.forEach(function (c) { if (!found && String(c.level) === lvl) found = c; });
+    return found;
+  }
+
+  function save() {
+    if (!session) return;
+    try { localStorage.setItem(STORAGE, JSON.stringify(session)); } catch (e) {}
+  }
+  function load() { try { return JSON.parse(localStorage.getItem(STORAGE) || 'null'); } catch (e) { return null; } }
+
+  function setHub(live, text) { var e = $('hubStatus'); e.textContent = text || (live ? 'Live' : 'Offline'); e.className = 'pill ' + (live ? 'live' : 'off'); }
+
+  function pairMsg(pair, sid) {
+    var other = pair.a === sid ? pair.b : pair.a;
+    return { type: 'paired', pairId: pair.id, partner: { name: (session.students[other] || {}).name || 'Partner' },
+      role: pair.a === sid ? 'first' : 'second', level: pair.level || session.level, locked: session.locked,
+      convoId: pair.convoId || null, step: pair.step || 0 };
+  }
+  function makePair(a, b) {
+    var id = 'p' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
+    var pair = { id: id, a: a, b: b, level: session.level, convoId: null, step: 0, transcript: [] };
+    session.pairs[id] = pair; session.pairOrder.push(id);
+    session.students[a].pairId = id; session.students[b].pairId = id;
+    send(a, pairMsg(pair, a)); send(b, pairMsg(pair, b));
+    save();
+    return pair;
+  }
+  function unpair(id) {
+    var pair = session.pairs[id]; if (!pair) return;
+    [pair.a, pair.b].forEach(function (sid) { if (session.students[sid]) session.students[sid].pairId = null; send(sid, { type: 'unpaired' }); });
+    delete session.pairs[id];
+    session.pairOrder = session.pairOrder.filter(function (x) { return x !== id; });
+    save(); renderRoster(); renderPairs();
+  }
+  function unpairedOnline() {
+    return Object.keys(session.students).filter(function (sid) { var s = session.students[sid]; return s.online && !s.pairId; })
+      .sort(function (x, y) { return session.students[x].joinedAt - session.students[y].joinedAt; });
+  }
+  function autoPair() {
+    if (!session) return;
+    var list = unpairedOnline(), n = 0;
+    for (var i = 0; i + 1 < list.length; i += 2) { makePair(list[i], list[i + 1]); n++; }
+    picked = [];
+    renderRoster(); renderPairs();
+    toast(n ? n + (n === 1 ? ' pair made' : ' pairs made') + (list.length % 2 ? '. One student is waiting for a partner.' : '') : 'Need two unpaired students');
+  }
+
+  function renderRoster() {
+    var box = $('roster'); box.textContent = '';
+    var ids = session ? Object.keys(session.students) : [];
+    $('rosterCount').textContent = ids.length + (ids.length === 1 ? ' student' : ' students');
+    $('btnAutoPair').disabled = !session;
+    if (!ids.length) { box.appendChild(el('div', 'empty', 'Waiting for students…')); return; }
+    ids.sort(function (x, y) { return session.students[x].joinedAt - session.students[y].joinedAt; }).forEach(function (sid) {
+      var s = session.students[sid];
+      var b = el('button', 'stu' + (s.pairId ? ' paired' : '') + (s.online ? '' : ' offline'));
+      b.type = 'button'; b.setAttribute('data-id', sid); b.setAttribute('aria-pressed', picked.indexOf(sid) >= 0 ? 'true' : 'false');
+      var av = el('span', 'av', s.name.charAt(0).toUpperCase());
+      b.appendChild(av); b.appendChild(document.createTextNode(s.name + ' '));
+      var partner = s.pairId && session.pairs[s.pairId] ? session.students[session.pairs[s.pairId].a === sid ? session.pairs[s.pairId].b : session.pairs[s.pairId].a] : null;
+      b.appendChild(el('small', '', s.online ? (partner ? '· with ' + partner.name : '· unpaired') : '· offline'));
+      b.addEventListener('click', function () { pick(sid); });
+      box.appendChild(b);
+    });
+  }
+  function pick(sid) {
+    var s = session.students[sid];
+    if (!s || s.pairId || !s.online) { toast(s && s.pairId ? s.name + ' is already paired' : 'That student is offline'); return; }
+    var i = picked.indexOf(sid);
+    if (i >= 0) picked.splice(i, 1); else picked.push(sid);
+    if (picked.length === 2) { var p = makePair(picked[0], picked[1]); picked = []; toast(session.students[p.a].name + ' + ' + session.students[p.b].name + ' paired'); renderPairs(); }
+    renderRoster();
+  }
+
+  function renderPairs() {
+    var box = $('pairs'); box.textContent = '';
+    if (!session || !session.pairOrder.length) { box.appendChild(el('div', 'empty', 'No pairs yet')); return; }
+    session.pairOrder.forEach(function (id) {
+      var pair = session.pairs[id]; if (!pair) return;
+      var A = session.students[pair.a] || { name: '?' }, B = session.students[pair.b] || { name: '?' };
+      var card = el('div', 'pair'); card.setAttribute('data-pair', id);
+      var head = el('div', 'pair-head');
+      var names = el('div', 'pair-names');
+      names.appendChild(el('span', 'dot' + (A.online ? ' on' : ''))); names.appendChild(el('span', '', A.name));
+      names.appendChild(el('span', 'muted', '+'));
+      names.appendChild(el('span', 'dot' + (B.online ? ' on' : ''))); names.appendChild(el('span', '', B.name));
+      names.appendChild(el('span', 'muted', (A.online && B.online) ? 'both connected' : 'waiting for a connection'));
+      head.appendChild(names);
+      var c = convoFor(pair), steps = (c && c.steps) || [], st = pair.step || 0;
+      var stepLine = el('div', 'pair-step'); stepLine.setAttribute('data-role', 'pair-step');
+      if (c && st < steps.length) {
+        stepLine.textContent = 'Level ' + (pair.level || session.level) + ' · ' + c.title + ' · Step ' + (st + 1) + ' of ' + steps.length + ': ' + steps[st].prompt + ' · Turn: ';
+        stepLine.appendChild(el('b', '', st % 2 === 0 ? A.name : B.name));
+      } else if (c) {
+        stepLine.textContent = 'Level ' + (pair.level || session.level) + ' · ' + c.title + ' · Guided steps done, free Italian now';
+      } else stepLine.textContent = 'Level ' + (pair.level || session.level);
+      head.appendChild(stepLine);
+      card.appendChild(head);
+      var tx = el('div', 'tx'); tx.setAttribute('data-role', 'transcript');
+      if (!pair.transcript.length) tx.appendChild(el('div', 'empty', 'No lines sent yet.'));
+      pair.transcript.forEach(function (ln) {
+        var b = el('div', 'line ' + (ln.from === pair.a ? 'a' : 'b'));
+        b.setAttribute('data-text', ln.text); b.setAttribute('data-from', ln.name);
+        var t = new Date(ln.at);
+        b.appendChild(el('span', 'meta', ln.name + ' · ' + t.getHours() + ':' + String(t.getMinutes()).padStart(2, '0')));
+        b.appendChild(document.createTextNode(ln.text));
+        tx.appendChild(b);
+      });
+      card.appendChild(tx);
+      var foot = el('div', 'pair-foot');
+      var ub = el('button', '', 'Unpair'); ub.type = 'button'; ub.addEventListener('click', function () { unpair(id); });
+      foot.appendChild(ub); card.appendChild(foot);
+      box.appendChild(card);
+      tx.scrollTop = tx.scrollHeight;
+    });
+  }
+
+  function partnerOf(pair, sid) { return pair.a === sid ? pair.b : pair.a; }
+
+  function onMsg(sid, data) {
+    if (!session || !data || typeof data !== 'object') return;
+    if (data.type === 'join') {
+      var prev = session.students[sid];
+      var name = String(data.name || 'Student').trim().split(/\s+/)[0].slice(0, 18) || 'Student';
+      session.students[sid] = { id: sid, name: name, online: true, pairId: prev ? prev.pairId : null, joinedAt: prev ? prev.joinedAt : Date.now() };
+      send(sid, { type: 'welcome', className: session.className || 'Italian class', level: session.level, locked: session.locked });
+      var pair = session.students[sid].pairId && session.pairs[session.students[sid].pairId];
+      if (pair) { send(sid, pairMsg(pair, sid)); send(partnerOf(pair, sid), { type: 'partner_status', online: true }); }
+      save(); renderRoster(); renderPairs();
+      toast(name + ' joined');
+      return;
+    }
+    var st = session.students[sid]; if (!st) return;
+    var pr = st.pairId && session.pairs[st.pairId];
+    if (!pr || (data.pairId && data.pairId !== pr.id)) return;
+    var other = partnerOf(pr, sid);
+    if (data.type === 'line') {
+      var text = String(data.text || '').trim().slice(0, 300);
+      if (!text) return;
+      var step = typeof data.step === 'number' ? data.step : pr.step;
+      pr.step = step;
+      if (data.level) pr.level = String(data.level);
+      if (data.convoId) pr.convoId = String(data.convoId);
+      pr.transcript.push({ from: sid, name: st.name, text: text, step: step, level: pr.level, at: data.at || Date.now() });
+      send(other, { type: 'line', pairId: pr.id, from: st.name, text: text, step: step, level: pr.level });
+      save(); renderPairs();
+      return;
+    }
+    if (data.type === 'level_change' && !session.locked && data.level) {
+      pr.level = String(data.level); pr.convoId = null; pr.step = 0;
+      send(other, { type: 'level', level: pr.level, locked: false });
+      save(); renderPairs();
+      return;
+    }
+    if (data.type === 'convo_change' && !session.locked && data.id) {
+      pr.convoId = String(data.id); pr.step = 0;
+      send(other, { type: 'convo', id: pr.convoId });
+      save(); renderPairs();
+    }
+  }
+
+  function onConnection(conn) {
+    var sid = String((conn.metadata && conn.metadata.studentId) || String(conn.peer).split('-s-').pop()).replace(/[^a-zA-Z0-9]/g, '');
+    if (conns[sid] && conns[sid] !== conn) { try { conns[sid].close(); } catch (e) {} }
+    conns[sid] = conn;
+    conn.on('data', function (d) { onMsg(sid, d); });
+    conn.on('close', function () {
+      if (conns[sid] !== conn) return;
+      delete conns[sid];
+      var s = session && session.students[sid];
+      if (s) {
+        s.online = false;
+        var pair = s.pairId && session.pairs[s.pairId];
+        if (pair) send(partnerOf(pair, sid), { type: 'partner_status', online: false });
+        picked = picked.filter(function (x) { return x !== sid; });
+        save(); renderRoster(); renderPairs();
+      }
+    });
+  }
+
+  function startPeer(code) {
+    return new Promise(function (resolve, reject) {
+      if (typeof Peer !== 'function') { reject(new Error('no peerjs')); return; }
+      if (oldPeer) { try { oldPeer.destroy(); } catch (e) {} oldPeer = null; }
+      if (peer) { try { peer.destroy(); } catch (e) {} peer = null; }
+      var timer = setTimeout(function () { reject(new Error('timeout')); }, 12000);
+      try { peer = new Peer(teacherPeerId(code), { debug: 0 }); } catch (e) { clearTimeout(timer); reject(e); return; }
+      peer.on('open', function () { clearTimeout(timer); setHub(true, 'Live hub'); $('hubHelp').hidden = true; resolve(); });
+      peer.on('connection', onConnection);
+      peer.on('error', function (err) {
+        clearTimeout(timer);
+        if (err && err.type === 'peer-unavailable') return; // a student left; not fatal
+        setHub(false, 'Hub error'); $('hubHelp').hidden = false; reject(err);
+      });
+      peer.on('disconnected', function () { try { peer.reconnect(); } catch (e) {} });
+    });
+  }
+
+  function joinUrl() { return location.origin + location.pathname.replace(/teacher\.html$/, '') + '?join=' + encodeURIComponent(session.code); }
+  function showSession() {
+    $('sessionBlock').hidden = false;
+    $('joinCode').textContent = session.code;
+    var u = joinUrl(); $('joinUrl').textContent = u; $('joinUrl').href = u;
+    $('btnEnd').disabled = false; $('btnCreate').disabled = true; $('reopenRow').hidden = true;
+    $('className').value = session.className; $('levelSel').value = session.level; $('lockLevel').checked = session.locked;
+  }
+  function createSession() {
+    var code = makeCode();
+    session = { code: code, className: ($('className').value || '').trim().slice(0, 40), pin: ($('pin').value || '').trim().slice(0, 8),
+      level: $('levelSel').value, locked: $('lockLevel').checked, students: {}, pairs: {}, pairOrder: [], createdAt: Date.now() };
+    $('btnCreate').disabled = true;
+    startPeer(code).then(function () {
+      save(); showSession(); renderRoster(); renderPairs(); toast('Session live. Share the code.');
+    }).catch(function () {
+      session = null; $('btnCreate').disabled = false; setHub(false, 'Offline'); $('hubHelp').hidden = false;
+      toast('Could not start the class hub');
+    });
+  }
+  function reopenSession() {
+    var saved = load(); if (!saved || !saved.code) { toast('No saved session on this device'); return; }
+    if ((saved.pin || '') && ($('reopenPin').value || '').trim() !== saved.pin) { toast('PIN incorrect'); return; }
+    session = saved;
+    Object.keys(session.students).forEach(function (sid) { session.students[sid].online = false; });
+    startPeer(session.code).then(function () { showSession(); renderRoster(); renderPairs(); toast('Session reopened'); })
+      .catch(function () { session = null; toast('Could not reopen. Create a new session.'); });
+  }
+  function endSession() {
+    if (!session) return;
+    Object.keys(conns).forEach(function (sid) { send(sid, { type: 'ended' }); });
+    var p = peer; oldPeer = p; setTimeout(function () { if (p && oldPeer === p) { try { p.destroy(); } catch (e) {} oldPeer = null; } }, 300);
+    peer = null; conns = {}; picked = [];
+    save(); session = null;
+    $('sessionBlock').hidden = true; $('btnEnd').disabled = true; $('btnCreate').disabled = false;
+    setHub(false, 'Offline'); renderRoster(); renderPairs(); checkReopen();
+    toast('Session ended');
+  }
+  function onLevel() {
+    if (!session) return;
+    session.level = $('levelSel').value; session.locked = $('lockLevel').checked;
+    Object.keys(session.students).forEach(function (sid) { send(sid, { type: 'level', level: session.level, locked: session.locked }); });
+    session.pairOrder.forEach(function (id) { var p = session.pairs[id]; if (p) { p.level = session.level; p.convoId = null; p.step = 0; } });
+    save(); renderPairs(); toast('Level ' + session.level + (session.locked ? ' (locked)' : ''));
+  }
+  function checkReopen() { var s = load(); $('reopenRow').hidden = !(s && s.code) || !!session; }
+
+  $('btnCreate').addEventListener('click', createSession);
+  $('btnReopen').addEventListener('click', reopenSession);
+  $('btnEnd').addEventListener('click', endSession);
+  $('btnAutoPair').addEventListener('click', autoPair);
+  $('levelSel').addEventListener('change', onLevel);
+  $('lockLevel').addEventListener('change', onLevel);
+  $('btnCopyLink').addEventListener('click', function () {
+    if (!session) return;
+    (navigator.clipboard ? navigator.clipboard.writeText(joinUrl()) : Promise.reject()).then(function () { toast('Student link copied'); }, function () { toast(joinUrl()); });
+  });
+  window.addEventListener('beforeunload', function () { if (peer) { try { peer.destroy(); } catch (e) {} } });
+  checkReopen(); renderRoster(); renderPairs();
+})();
+</script>
+</body>
+</html>
