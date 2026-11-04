@@ -90,7 +90,7 @@
   <div class="grid">
     <section class="card">
       <h2>1. Start a class session</h2>
-      <p class="muted">Keep this page open on your laptop or Chromebook. Students join from their own device with the code.</p>
+      <p class="muted">Students join from their own Chromebook with the code. Refreshing this page keeps the same class.</p>
       <div class="row" style="margin-top:12px">
         <label class="field">Class name<input id="className" maxlength="40" placeholder="Italian 2, Period 3"></label>
         <label class="field">Teacher PIN (optional, to reopen)<input id="pin" maxlength="8" inputmode="numeric" placeholder="4–8 digits"></label>
@@ -111,10 +111,11 @@
       </div>
       <div id="sessionBlock" hidden>
         <div class="code-big" id="joinCode">------</div>
-        <div class="row" style="justify-content:center"><span class="pill off" id="hubStatus">Offline</span><button type="button" id="btnCopyLink">Copy student link</button></div>
+        <p class="muted" id="hubNote" style="text-align:center;margin:0 0 8px"></p>
+        <div class="row" style="justify-content:center"><span class="pill off" id="hubStatus">Offline</span><button type="button" id="btnCopyLink">Copy student link</button><button type="button" id="btnReconnect" hidden>Reconnect hub</button></div>
         <p class="url">Students open: <a id="joinUrl" href="#" target="_blank" rel="noopener"></a></p>
       </div>
-      <div class="help" id="hubHelp" hidden>The class hub could not start. School Wi‑Fi may block the connection tool. Try another network, or have students use <b>Try both sides</b> on one computer.</div>
+      <div class="help" id="hubHelp" hidden>The class hub could not reconnect. Check the internet, then tap <b>Reconnect hub</b>. The class code stays the same. If school Wi‑Fi blocks the connection tool, students can use <b>Try both sides</b> on one computer.</div>
     </section>
 
     <section class="card">
@@ -124,7 +125,7 @@
         <span class="muted" id="rosterCount">0 students</span>
       </div>
       <div class="roster" id="roster"><div class="empty">Waiting for students…</div></div>
-      <p class="muted">Tap two unpaired students to pair them, or use Auto-pair. The first name in a pair starts.</p>
+      <p class="muted">Tap two unpaired students to pair them, or use Auto-pair. The first name in a pair starts. After a refresh, names stay here and students rejoin with the same code.</p>
     </section>
   </div>
 
@@ -424,22 +425,89 @@
     });
   }
 
-  function startPeer(code) {
+  function setHubNote(text) { var n = $('hubNote'); if (n) n.textContent = text || ''; }
+  function retryableHubError(err) {
+    var type = err && (err.type || err.message);
+    return type === 'unavailable-id' || type === 'network' || type === 'server-error' || type === 'socket-error' || type === 'socket-closed' || type === 'disconnected' || type === 'timeout' || type === 'webrtc';
+  }
+  var hubAttempt = 0;
+  function startPeerOnce(code) {
     return new Promise(function (resolve, reject) {
-      if (typeof Peer !== 'function') { reject(new Error('no peerjs')); return; }
+      if (typeof Peer !== 'function') { reject({ type: 'no-peerjs', message: 'no peerjs' }); return; }
       if (oldPeer) { try { oldPeer.destroy(); } catch (e) {} oldPeer = null; }
       if (peer) { try { peer.destroy(); } catch (e) {} peer = null; }
-      var timer = setTimeout(function () { reject(new Error('timeout')); }, 12000);
-      try { peer = new Peer(teacherPeerId(code), { debug: 0 }); } catch (e) { clearTimeout(timer); reject(e); return; }
-      peer.on('open', function () { clearTimeout(timer); setHub(true, 'Live hub'); $('hubHelp').hidden = true; resolve(); });
-      peer.on('connection', onConnection);
-      peer.on('error', function (err) {
+      var attemptPeer = null;
+      var settled = false;
+      var timer = setTimeout(function () { finish({ type: 'timeout', message: 'timeout' }); }, 8000);
+      function finish(err) {
+        if (settled) return;
+        settled = true;
         clearTimeout(timer);
-        if (err && err.type === 'peer-unavailable') return; // a student left; not fatal
-        setHub(false, 'Hub error'); $('hubHelp').hidden = false; reject(err);
+        if (err) {
+          try { if (attemptPeer) attemptPeer.destroy(); } catch (e) {}
+          if (peer === attemptPeer) peer = null;
+          reject(err);
+        } else resolve();
+      }
+      try { attemptPeer = new Peer(teacherPeerId(code), { debug: 0 }); }
+      catch (e) { finish({ type: 'invalid-id', message: String(e && e.message || e) }); return; }
+      peer = attemptPeer;
+      attemptPeer.on('open', function () {
+        setHub(true, 'Live hub');
+        $('hubHelp').hidden = true;
+        $('btnReconnect').hidden = true;
+        finish(null);
       });
-      peer.on('disconnected', function () { try { peer.reconnect(); } catch (e) {} });
+      attemptPeer.on('connection', onConnection);
+      attemptPeer.on('error', function (err) {
+        if (err && err.type === 'peer-unavailable') return; // a student left; not fatal
+        if (!settled) finish(err || { type: 'network', message: 'network' });
+        else if (session && session.code === code && err && err.type === 'unavailable-id') startPeerRetry(code);
+        else if (err && retryableHubError(err)) {
+          setHub(false, 'Reconnecting');
+          setHubNote('The connection blipped. Reconnecting. The class code has not changed.');
+          try { attemptPeer.reconnect(); } catch (e) {}
+        }
+      });
+      attemptPeer.on('disconnected', function () {
+        if (!settled || !session) return;
+        setHub(false, 'Reconnecting');
+        setHubNote('Reconnecting your class. The code has not changed.');
+        try { attemptPeer.reconnect(); } catch (e) {}
+      });
     });
+  }
+  function startPeerRetry(code) {
+    var token = ++hubAttempt;
+    function once(n) {
+      if (token !== hubAttempt) return Promise.reject({ type: 'replaced' });
+      return startPeerOnce(code).catch(function (err) {
+        if (token !== hubAttempt) return Promise.reject(err);
+        if (n < 6 && retryableHubError(err)) {
+          setHub(false, 'Reconnecting');
+          setHubNote('Reconnecting your class. The code ' + code + ' has not changed.');
+          return new Promise(function (resolve, reject) {
+            setTimeout(function () { once(n + 1).then(resolve, reject); }, 700 * n);
+          });
+        }
+        throw err;
+      });
+    }
+    return once(1);
+  }
+  function onHubReady(restored) {
+    if (session) { session.active = true; session.ended = false; save(); }
+    setHubNote(restored
+      ? 'This is the same class. Students who disconnected can stay on their page or tap Join again.'
+      : 'Students join from their own Chromebook with this code.');
+    renderRoster(); renderPairs();
+    toast(restored ? 'Class restored. Same code.' : 'Session live. Share the code.');
+  }
+  function onHubFail() {
+    setHub(false, 'Offline');
+    $('hubHelp').hidden = false;
+    $('btnReconnect').hidden = false;
+    if (session) setHubNote('The class is saved, but the hub is not connected. Tap Reconnect hub. The code stays ' + session.code + '.');
   }
 
   function joinUrl() { return location.origin + location.pathname.replace(/teacher\.html$/, '') + '?join=' + encodeURIComponent(session.code); }
@@ -453,29 +521,66 @@
   function createSession() {
     var code = makeCode();
     session = { code: code, className: ($('className').value || '').trim().slice(0, 40), pin: ($('pin').value || '').trim().slice(0, 8),
-      level: $('levelSel').value, locked: $('lockLevel').checked, students: {}, pairs: {}, pairOrder: [], flags: [], createdAt: Date.now() };
+      level: $('levelSel').value, locked: $('lockLevel').checked, students: {}, pairs: {}, pairOrder: [], flags: [], createdAt: Date.now(), active: true, ended: false };
+    save();
     $('btnCreate').disabled = true;
-    startPeer(code).then(function () {
-      save(); showSession(); renderRoster(); renderPairs(); toast('Session live. Share the code.');
-    }).catch(function () {
-      session = null; $('btnCreate').disabled = false; setHub(false, 'Offline'); $('hubHelp').hidden = false;
+    $('hubHelp').hidden = true;
+    showSession();
+    setHub(false, 'Connecting');
+    setHubNote('Starting the class hub…');
+    startPeerRetry(code).then(function () { onHubReady(false); }).catch(function () {
+      if (session && session.code === code) { session.active = false; session.ended = true; save(); session = null; }
+      $('sessionBlock').hidden = true; $('btnCreate').disabled = false; $('btnEnd').disabled = true;
+      setHub(false, 'Offline'); $('hubHelp').hidden = false;
       toast('Could not start the class hub');
     });
+  }
+  function adoptSaved(saved) {
+    session = saved;
+    session.flags = session.flags || [];
+    session.pairs = session.pairs || {};
+    session.pairOrder = session.pairOrder || [];
+    session.students = session.students || {};
+    session.active = true;
+    session.ended = false;
+    Object.keys(session.students).forEach(function (sid) { session.students[sid].online = false; });
+    showSession();
+    renderRoster();
+    renderPairs();
+  }
+  function restoreSession(saved) {
+    adoptSaved(saved);
+    $('hubHelp').hidden = true;
+    $('btnReconnect').hidden = true;
+    setHub(false, 'Reconnecting');
+    setHubNote('Bringing your class back. The code has not changed.');
+    startPeerRetry(session.code).then(function () { onHubReady(true); }).catch(function () { onHubFail(); toast('Could not reconnect the class hub'); });
   }
   function reopenSession() {
     var saved = load(); if (!saved || !saved.code) { toast('No saved session on this device'); return; }
     if ((saved.pin || '') && ($('reopenPin').value || '').trim() !== saved.pin) { toast('PIN incorrect'); return; }
-    session = saved;
-    session.flags = session.flags || [];
-    Object.keys(session.students).forEach(function (sid) { session.students[sid].online = false; });
-    startPeer(session.code).then(function () { showSession(); renderRoster(); renderPairs(); toast('Session reopened'); })
-      .catch(function () { session = null; toast('Could not reopen. Create a new session.'); });
+    restoreSession(saved);
+  }
+  function reconnectHub() {
+    if (!session || !session.code) { reopenSession(); return; }
+    $('hubHelp').hidden = true;
+    $('btnReconnect').hidden = true;
+    setHub(false, 'Reconnecting');
+    setHubNote('Reconnecting your class. The code has not changed.');
+    startPeerRetry(session.code).then(function () { onHubReady(true); }).catch(function () { onHubFail(); toast('Could not reconnect the class hub'); });
+  }
+  function maybeRestore() {
+    var saved = load();
+    if (saved && saved.code && saved.active && !saved.ended) restoreSession(saved);
+    else { checkReopen(); renderRoster(); renderPairs(); }
   }
   function endSession() {
     if (!session) return;
     Object.keys(conns).forEach(function (sid) { send(sid, { type: 'ended' }); });
     var p = peer; oldPeer = p; setTimeout(function () { if (p && oldPeer === p) { try { p.destroy(); } catch (e) {} oldPeer = null; } }, 300);
     peer = null; conns = {}; picked = [];
+    hubAttempt += 1;
+    session.active = false; session.ended = true;
     save(); session = null;
     $('sessionBlock').hidden = true; $('btnEnd').disabled = true; $('btnCreate').disabled = false;
     setHub(false, 'Offline'); renderRoster(); renderPairs(); checkReopen();
@@ -492,6 +597,7 @@
 
   $('btnCreate').addEventListener('click', createSession);
   $('btnReopen').addEventListener('click', reopenSession);
+  $('btnReconnect').addEventListener('click', reconnectHub);
   $('btnEnd').addEventListener('click', endSession);
   $('btnAutoPair').addEventListener('click', autoPair);
   $('levelSel').addEventListener('change', onLevel);
@@ -501,7 +607,7 @@
     (navigator.clipboard ? navigator.clipboard.writeText(joinUrl()) : Promise.reject()).then(function () { toast('Student link copied'); }, function () { toast(joinUrl()); });
   });
   window.addEventListener('beforeunload', function () { if (peer) { try { peer.destroy(); } catch (e) {} } });
-  checkReopen(); renderRoster(); renderPairs();
+  maybeRestore();
 })();
 </script>
 </body>
