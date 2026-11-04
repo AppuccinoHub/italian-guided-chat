@@ -11,7 +11,7 @@
   var FREE = "Now write your own message in Italian.";
   var NO_PARTNER = "No partner is connected, so this stayed here. Use Try both sides, or Join class.";
   var WAITING = "Waiting for your partner.";
-  var CLASS_FAIL = "Could not reach the teacher's class. Check the code with your teacher, or use Try both sides on this computer.";
+  var CLASS_FAIL = "Could not reach the teacher's class. Check the code, stay with your teacher, and tap Join again.";
   var FLAG_COPY = {
     swear: "That message was not sent. Please keep this chat school-appropriate.",
     putdown: "That message was not sent. Please do not put people down.",
@@ -563,6 +563,15 @@
     }
     return id;
   }
+  function readJoin() {
+    try { return JSON.parse(sessionStorage.getItem("italianGuidedJoin") || "null"); } catch (e) { return null; }
+  }
+  function rememberJoin(code, name) {
+    try { sessionStorage.setItem("italianGuidedJoin", JSON.stringify({ code: code, name: name })); } catch (e) {}
+  }
+  function forgetJoin() {
+    try { sessionStorage.removeItem("italianGuidedJoin"); } catch (e) {}
+  }
   function setClassStatus(text) {
     var node = q("[data-role='class-status']");
     if (node) node.textContent = text;
@@ -585,11 +594,13 @@
   function leaveClass(silent) {
     var c = state.cls;
     if (c) {
+      c.cancelled = true;
       if (c.timer) clearTimeout(c.timer);
       if (c.conn) { try { c.conn.close(); } catch (e) {} }
       if (c.peer) { try { c.peer.destroy(); } catch (e) {} }
     }
     state.cls = null;
+    if (!silent) forgetJoin();
     var leave = q("[data-role='leave-class']");
     var join = q("[data-role='join-class']");
     if (leave) leave.hidden = true;
@@ -604,6 +615,11 @@
     if (!c || !data || typeof data !== "object") return;
     if (data.type === "welcome") {
       c.joined = true;
+      c.wasConnected = true;
+      c.retrying = false;
+      if (c.timer) { clearTimeout(c.timer); c.timer = null; }
+      var joinBtn = q("[data-role='join-class']");
+      if (joinBtn) joinBtn.hidden = true;
       c.className = String(data.className || "your class");
       c.locked = !!data.locked;
       if (data.level && convosFor(data.level).length && String(data.level) !== state.level) setLevel(String(data.level), true);
@@ -617,9 +633,10 @@
       c.partner = String((data.partner && data.partner.name) || "Partner");
       c.role = data.role === "first" ? "first" : "second";
       c.locked = !!data.locked;
-      setLevel(data.level && convosFor(data.level).length ? String(data.level) : state.level, true);
-      if (data.convoId && data.convoId !== state.convo.id) setConversation(String(data.convoId), true);
-      if (typeof data.step === "number" && data.step >= 0 && data.step <= (state.convo.steps || []).length) state.step = data.step;
+      var nextLevel = data.level && convosFor(data.level).length ? String(data.level) : state.level;
+      if (String(state.level) !== String(nextLevel)) setLevel(nextLevel, true);
+      else if (data.convoId && state.convo && data.convoId !== state.convo.id) setConversation(String(data.convoId), true);
+      if (!isOpenConvo() && typeof data.step === "number" && data.step >= 0 && data.step <= (state.convo.steps || []).length) state.step = data.step;
       syncLevelUi();
       fillConversationSelect();
       refreshPairedStatus();
@@ -656,9 +673,79 @@
     }
     if (data.type === "convo" && data.id) { setConversation(String(data.id), true); return; }
     if (data.type === "ended") {
+      forgetJoin();
       leaveClass(true);
       setClassStatus("Your teacher ended the class session.");
     }
+  }
+  function failFinal(c) {
+    if (state.cls !== c || c.cancelled) return;
+    if (c.timer) { clearTimeout(c.timer); c.timer = null; }
+    setClassStatus(CLASS_FAIL);
+    var join = q("[data-role='join-class']");
+    if (join) join.hidden = false;
+  }
+  function scheduleRetry(c) {
+    if (state.cls !== c || c.cancelled || c.retrying) return;
+    if (c.joined && c.conn && c.conn.open) return;
+    c.retrying = true;
+    c.joined = false;
+    if (c.timer) { clearTimeout(c.timer); c.timer = null; }
+    var oldConn = c.conn;
+    var oldPeer = c.peer;
+    c.conn = null;
+    c.peer = null;
+    try { if (oldConn) oldConn.close(); } catch (e) {}
+    try { if (oldPeer) oldPeer.destroy(); } catch (e) {}
+    if (Date.now() > c.giveUpAt) { c.retrying = false; failFinal(c); return; }
+    setClassStatus(c.wasConnected
+      ? "Reconnecting to class " + c.code + "… Stay on this page. Your teacher does not need a new code."
+      : "Still connecting to class " + c.code + "… If your teacher just refreshed, stay on this page.");
+    c.timer = setTimeout(function () {
+      if (state.cls !== c || c.cancelled || c.joined) return;
+      c.retrying = false;
+      c.tries += 1;
+      attemptConnect(c);
+    }, 1000);
+  }
+  function attemptConnect(c) {
+    if (state.cls !== c || c.cancelled) return;
+    if (!c.wasConnected && c.tries === 1) setClassStatus("Connecting to class " + c.code + "…");
+    var peerObj;
+    try { peerObj = new Peer(teacherPeerId(c.code) + "-s-" + c.sid, { debug: 0 }); }
+    catch (e) { scheduleRetry(c); return; }
+    c.peer = peerObj;
+    peerObj.on("open", function () {
+      if (state.cls !== c || c.cancelled || c.peer !== peerObj) return;
+      var conn;
+      try { conn = peerObj.connect(teacherPeerId(c.code), { reliable: true, metadata: { studentId: c.sid } }); }
+      catch (e) { scheduleRetry(c); return; }
+      c.conn = conn;
+      conn.on("open", function () {
+        if (state.cls !== c || c.conn !== conn) return;
+        try { conn.send({ type: "join", name: c.name, studentId: c.sid }); } catch (e) { scheduleRetry(c); }
+      });
+      conn.on("data", onTeacherMsg);
+      conn.on("close", function () {
+        if (state.cls !== c || c.cancelled || c.conn !== conn) return;
+        c.wasConnected = true;
+        c.giveUpAt = Date.now() + 45000;
+        scheduleRetry(c);
+      });
+      conn.on("error", function () {
+        if (state.cls !== c || c.conn !== conn) return;
+        scheduleRetry(c);
+      });
+    });
+    peerObj.on("error", function (err) {
+      if (state.cls !== c || c.cancelled || c.peer !== peerObj) return;
+      if (err && err.type === "unavailable-id") c.giveUpAt = Math.max(c.giveUpAt, Date.now() + 20000);
+      scheduleRetry(c);
+    });
+    peerObj.on("disconnected", function () {
+      if (state.cls !== c || c.peer !== peerObj) return;
+      try { peerObj.reconnect(); } catch (e) { scheduleRetry(c); }
+    });
   }
   function joinClass() {
     var codeIn = q("[data-role='join-code']");
@@ -670,46 +757,23 @@
     if (!name) { setClassStatus("Enter your first name."); return; }
     if (typeof Peer !== "function") { setClassStatus("The connection tool did not load. " + CLASS_FAIL); return; }
     leaveClass(true);
+    rememberJoin(code, name);
     var sid = studentId();
-    var c = state.cls = { code: code, name: name, sid: sid, peer: null, conn: null, joined: false, pairId: null, partner: null, role: null, locked: false, timer: null };
-    setClassStatus("Connecting to class " + code + "…");
+    var c = state.cls = {
+      code: code, name: name, sid: sid, peer: null, conn: null, joined: false, pairId: null, partner: null,
+      role: null, locked: false, timer: null, cancelled: false, retrying: false, tries: 1, wasConnected: false,
+      giveUpAt: Date.now() + 45000
+    };
     q("[data-role='join-class']").hidden = true;
     q("[data-role='leave-class']").hidden = false;
-    var fail = function () {
-      if (state.cls !== c) return;
-      if (c.timer) { clearTimeout(c.timer); c.timer = null; }
-      setClassStatus(CLASS_FAIL);
-      q("[data-role='join-class']").hidden = false;
-    };
-    c.timer = setTimeout(function () { if (!c.joined) fail(); }, 12000);
-    try {
-      c.peer = new Peer(teacherPeerId(code) + "-s-" + sid, { debug: 0 });
-    } catch (e) { fail(); return; }
-    c.peer.on("open", function () {
-      var conn;
-      try { conn = c.peer.connect(teacherPeerId(code), { reliable: true, metadata: { studentId: sid } }); } catch (e) { fail(); return; }
-      c.conn = conn;
-      conn.on("open", function () {
-        try { conn.send({ type: "join", name: name, studentId: sid }); } catch (e) { fail(); }
-      });
-      conn.on("data", onTeacherMsg);
-      conn.on("close", function () {
-        if (state.cls !== c) return;
-        c.pairId = null;
-        setClassStatus("Lost the connection to your teacher. Join again, or use Try both sides.");
-        q("[data-role='join-class']").hidden = false;
-        renderAll();
-      });
-      conn.on("error", fail);
-    });
-    c.peer.on("error", fail);
+    attemptConnect(c);
     renderAll();
   }
 
   /* ---------- modes ---------- */
   function setMode(mode) {
     if (mode === "class" && !state.standalone) mode = "solo";
-    if (state.mode === "class" && mode !== "class") leaveClass(true);
+    if (state.mode === "class" && mode !== "class") { forgetJoin(); leaveClass(true); }
     state.mode = mode;
     state.both = mode === "both";
     var stage = q("[data-role='stage']");
@@ -840,11 +904,17 @@
 
     if (state.standalone) {
       var params = new URLSearchParams(location.search);
+      var savedJoin = readJoin();
       var code = (params.get("join") || params.get("code") || "").toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 6);
+      if (!code && savedJoin && savedJoin.code) code = String(savedJoin.code || "").toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 6);
       if (code) {
         setMode("class");
         q("[data-role='join-code']").value = code;
-        q("[data-role='join-name']").focus();
+        var savedName = savedJoin && String(savedJoin.code || "").toUpperCase() === code ? String(savedJoin.name || "") : "";
+        if (savedName) {
+          q("[data-role='join-name']").value = savedName;
+          joinClass();
+        } else q("[data-role='join-name']").focus();
       }
     }
   }
