@@ -533,13 +533,25 @@
     if (session) setHubNote(hubFailureText(err, session.code));
   }
 
-  function joinUrl() { return location.origin + location.pathname.replace(/teacher\.html$/, '') + '?join=' + encodeURIComponent(session.code); }
+  function joinUrl() {
+    var level = session.level || "1";
+    return location.origin + location.pathname.replace(/teacher\.html$/, '') + '?join=' + encodeURIComponent(session.code) + '&level=' + encodeURIComponent(level);
+  }
+  function refreshJoinLink() {
+    if (!session) return;
+    var u = joinUrl();
+    var link = $('joinUrl');
+    if (!link) return;
+    link.textContent = u;
+    link.href = u;
+  }
   function showSession() {
     $('sessionBlock').hidden = false;
     $('joinCode').textContent = session.code;
     var u = joinUrl(); $('joinUrl').textContent = u; $('joinUrl').href = u;
     $('btnEnd').disabled = false; $('btnCreate').disabled = true; $('reopenRow').hidden = true;
     $('className').value = session.className; $('levelSel').value = session.level; $('lockLevel').checked = session.locked;
+    refreshJoinLink();
   }
   function createSession() {
     var code = makeCode();
@@ -621,7 +633,10 @@
     session.level = $('levelSel').value; session.locked = $('lockLevel').checked;
     Object.keys(session.students).forEach(function (sid) { send(sid, { type: 'level', level: session.level, locked: session.locked }); });
     session.pairOrder.forEach(function (id) { var p = session.pairs[id]; if (p) { p.level = session.level; p.convoId = null; p.step = 0; } });
-    save(); renderPairs(); toast('Level ' + session.level + (session.locked ? ' (locked)' : ''));
+    save();
+    refreshJoinLink();
+    renderPairs();
+    toast('Level ' + session.level + (session.locked ? ' (locked)' : ''));
   }
   function checkReopen() { var s = load(); $('reopenRow').hidden = !(s && s.code) || !!session; }
 

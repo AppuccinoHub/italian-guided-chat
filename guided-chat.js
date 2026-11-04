@@ -364,10 +364,10 @@
     }
     var partner = "Practice on this computer.";
     if (state.both) partner = "You are trying both sides on this computer.";
-    else if (state.mode === "class" && state.cls) {
-      if (classPaired()) partner = "Paired with " + state.cls.partner + ".";
-      else if (state.cls.joined) partner = "Waiting for the teacher to pair you.";
-      else partner = "Join the class to get a partner.";
+    else if (state.mode === "class") {
+      if (state.cls && classPaired()) partner = "Paired with " + state.cls.partner + ".";
+      else if (state.cls && state.cls.joined) partner = "Waiting for the teacher to pair you.";
+      else partner = state.linkLevel ? "Level " + state.linkLevel + " class link. Enter your name and tap Join." : "Enter your name and tap Join.";
     }
     who.textContent = partner;
     list.textContent = "";
@@ -501,7 +501,10 @@
     var sel = q("[data-role='level']");
     if (!sel) return;
     if (sel.value !== state.level) sel.value = state.level;
-    sel.disabled = !!(state.mode === "class" && state.cls && state.cls.locked);
+    var inClass = state.mode === "class";
+    var teacherLocked = !!(inClass && state.cls && state.cls.locked);
+    var linkHolds = !!(state.linkLevel && inClass && !(state.cls && state.cls.joined && !state.cls.locked));
+    sel.disabled = teacherLocked || linkHolds;
   }
   function setLevel(level, fromRemote) {
     var list = convosFor(level);
@@ -917,7 +920,8 @@
     stage.appendChild(desk);
     mount.appendChild(stage);
 
-    var wanted = mount.getAttribute("data-level") || "1";
+    var wanted = levelFromSearch() || mount.getAttribute("data-level") || "1";
+    if (levelFromSearch()) state.linkLevel = levelFromSearch();
     if (!convosFor(wanted).length) wanted = levels[0] || "1";
     levelSelect.value = wanted;
     setLevel(wanted, true);
@@ -938,6 +942,7 @@
       if (code) {
         setMode("class");
         q("[data-role='join-code']").value = code;
+        if (state.linkLevel) setClassStatus("This link is for Level " + state.linkLevel + ". Enter your first name and tap Join.");
         var savedName = savedJoin && String(savedJoin.code || "").toUpperCase() === code ? String(savedJoin.name || "") : "";
         if (savedName) {
           q("[data-role='join-name']").value = savedName;
@@ -945,6 +950,15 @@
         } else q("[data-role='join-name']").focus();
       }
     }
+  }
+
+  function levelFromSearch() {
+    var params;
+    try { params = new URLSearchParams(location.search); } catch (e) { return ""; }
+    var raw = String(params.get("level") || params.get("lvl") || "").trim();
+    if (/^ap$/i.test(raw)) return "AP";
+    if (/^[1234]$/.test(raw)) return raw;
+    return "";
   }
 
   function start(mount) {
