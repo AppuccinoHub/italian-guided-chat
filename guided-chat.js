@@ -211,6 +211,7 @@
       R + " .composer input { flex:1; min-width:0; border-radius:20px; border:1px solid var(--chip-border); background:var(--field); padding:10px 14px; font-size:16px; }",
       R + " .composer input:focus { outline:0; border-color:var(--me); }",
       R + " .composer button { background:var(--me); color:#fff; border:0; border-radius:20px; min-width:72px; min-height:42px; font-weight:700; cursor:pointer; }",
+      R + " .composer input:disabled, " + R + " .composer button:disabled { opacity:.45; cursor:default; }",
       R + " button:focus-visible, " + R + " input:focus-visible, " + R + " select:focus-visible { outline:3px solid var(--orange); outline-offset:2px; }"
     ].join("\n");
     document.head.appendChild(style);
@@ -258,6 +259,10 @@
   function classPaired() {
     var c = state.cls;
     return !!(c && c.pairId && c.conn && c.conn.open);
+  }
+  function chatFrozen() {
+    var c = state.cls;
+    return !!(state.mode === "class" && c && (c.classFrozen || c.pairFrozen));
   }
   function shared() { return state.both || classPaired(); }
   function stepOf(student) { return shared() ? state.step : student.step; }
@@ -311,7 +316,9 @@
     var turn = hasTurn(student);
     student.root.setAttribute("data-turn", turn ? "yes" : "no");
     student.root.setAttribute("data-open", isOpenConvo() ? "yes" : "no");
-    if (state.mode === "class" && !classPaired()) {
+    if (chatFrozen()) {
+      prompt.appendChild(el("span", { "data-role": "prompt-text", class: "waiting", text: "Teacher paused chat." }));
+    } else if (state.mode === "class" && !classPaired()) {
       var waitingText = "Join your teacher's class to start.";
       if (state.cls && state.cls.joined) waitingText = "Waiting for the teacher to pair you.";
       else if (state.cls) waitingText = "Joining the class. If this stays here, tap Reconnect.";
@@ -329,11 +336,17 @@
     }
     var box = student.root.querySelector("[data-role='chips']");
     box.textContent = "";
-    if (!(state.mode === "class" && !classPaired())) {
+    if (!chatFrozen() && !(state.mode === "class" && !classPaired())) {
       chipsFor(student).forEach(function (chip) {
         box.appendChild(el("button", { type: "button", "data-chip": chip, text: chip }));
       });
     }
+    var frozenNow = chatFrozen();
+    student.root.setAttribute("data-frozen", frozenNow ? "yes" : "no");
+    var composer = student.root.querySelector("[data-role='composer']");
+    var sendBtn = student.root.querySelector("[data-role='send']");
+    if (composer) composer.disabled = frozenNow;
+    if (sendBtn) sendBtn.disabled = frozenNow;
     var name = whoLabel(student);
     student.root.querySelector("[data-role='who-name']").textContent = name;
     student.root.querySelector("[data-role='avatar']").textContent = (name.charAt(0) || "?").toUpperCase();
@@ -368,7 +381,8 @@
     var partner = "Practice on this computer.";
     if (state.both) partner = "You are trying both sides on this computer.";
     else if (state.mode === "class") {
-      if (state.cls && classPaired()) partner = "Paired with " + state.cls.partner + ".";
+      if (chatFrozen()) partner = "Teacher paused chat.";
+      else if (state.cls && classPaired()) partner = "Paired with " + state.cls.partner + ".";
       else if (state.cls && state.cls.joined) partner = "Waiting for the teacher to pair you.";
       else partner = state.linkLevel ? "Level " + state.linkLevel + " class link. Enter your name and tap Join." : "Enter your name and tap Join.";
     }
@@ -486,6 +500,7 @@
   function attempt(student, raw) {
     var text = String(raw || "").trim();
     if (!text) return;
+    if (chatFrozen()) { setClassStatus("Teacher paused chat."); return; }
     var hit = safetyHit(text);
     if (hit) { holdFlag(student, text, hit); return; }
     var canon = canonical(text);
@@ -603,6 +618,7 @@
   function refreshPairedStatus() {
     var c = state.cls;
     if (!c || !c.pairId || !c.partner) return;
+    if (c.classFrozen || c.pairFrozen) { setClassStatus("Teacher paused chat."); return; }
     var extra = isOpenConvo() ? "Talk freely in Italian." : (c.role === "first" ? "You start." : c.partner + " starts.");
     setClassStatus("You are paired with " + c.partner + ". " + extra);
   }
@@ -666,10 +682,21 @@
       if (joinBtn) joinBtn.hidden = true;
       c.className = String(data.className || "your class");
       c.locked = !!data.locked;
+      if (typeof data.classFrozen === "boolean") c.classFrozen = data.classFrozen;
       if (!already && data.level && convosFor(data.level).length && String(data.level) !== state.level) setLevel(String(data.level), true);
       syncLevelUi();
-      if (c.pairId) refreshPairedStatus();
+      if (c.classFrozen || c.pairFrozen) setClassStatus("Teacher paused chat.");
+      else if (c.pairId) refreshPairedStatus();
       else setClassStatus("You joined " + c.className + ". Waiting for the teacher to pair you.");
+      renderAll();
+      return;
+    }
+    if (data.type === "freeze") {
+      c.classFrozen = !!data.classFrozen;
+      c.pairFrozen = !!data.pairFrozen;
+      if (c.classFrozen || c.pairFrozen) setClassStatus("Teacher paused chat.");
+      else if (c.pairId && c.partner) refreshPairedStatus();
+      else if (c.joined) setClassStatus("You joined " + (c.className || "your class") + ". Waiting for the teacher to pair you.");
       renderAll();
       return;
     }
@@ -678,27 +705,32 @@
       c.partner = String((data.partner && data.partner.name) || "Partner");
       c.role = data.role === "first" ? "first" : "second";
       c.locked = !!data.locked;
+      if (typeof data.classFrozen === "boolean") c.classFrozen = data.classFrozen;
+      if (typeof data.pairFrozen === "boolean") c.pairFrozen = data.pairFrozen;
       var nextLevel = data.level && convosFor(data.level).length ? String(data.level) : state.level;
       if (String(state.level) !== String(nextLevel)) setLevel(nextLevel, true);
       else if (data.convoId && state.convo && data.convoId !== state.convo.id) setConversation(String(data.convoId), true);
       if (!isOpenConvo() && typeof data.step === "number" && data.step >= 0 && data.step <= (state.convo.steps || []).length) state.step = data.step;
       syncLevelUi();
       fillConversationSelect();
-      refreshPairedStatus();
+      if (c.classFrozen || c.pairFrozen) setClassStatus("Teacher paused chat.");
+      else refreshPairedStatus();
       renderAll();
       return;
     }
     if (data.type === "unpaired") {
-      c.pairId = null; c.partner = null; c.role = null;
-      setClassStatus("The teacher changed pairs. Waiting for the teacher to pair you.");
+      c.pairId = null; c.partner = null; c.role = null; c.pairFrozen = false;
+      setClassStatus(c.classFrozen ? "Teacher paused chat." : "The teacher changed pairs. Waiting for the teacher to pair you.");
       resetConversation();
       return;
     }
     if (data.type === "partner_status") {
+      if (c.classFrozen || c.pairFrozen) return;
       if (c.partner) setClassStatus(data.online ? c.partner + " is back." : c.partner + " disconnected. Wait for them, or ask your teacher.");
       return;
     }
     if (data.type === "line") {
+      if (c.classFrozen || c.pairFrozen) return;
       if (!c.pairId || String(data.pairId) !== c.pairId) return;
       var clean = canonical(data.text);
       var line = clean || String(data.text || "").trim();
@@ -859,7 +891,7 @@
     var sid = studentId();
     var c = state.cls = {
       code: code, name: name, sid: sid, peer: null, conn: null, joined: false, pairId: null, partner: null,
-      role: null, locked: false, timer: null, watch: null, joinPulse: null, cancelled: false, stopped: false, retrying: false,
+      role: null, locked: false, classFrozen: false, pairFrozen: false, timer: null, watch: null, joinPulse: null, cancelled: false, stopped: false, retrying: false,
       tries: 1, wasConnected: false, lastError: "", idStrikes: 0, brokerRetries: 0
     };
     q("[data-role='join-class']").hidden = true;
