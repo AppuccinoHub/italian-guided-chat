@@ -17,6 +17,7 @@
   button.primary { background:var(--blue); border-color:var(--blue); color:#fff; font-weight:700; }
   button.good { background:var(--green); border-color:var(--green); color:#04140a; font-weight:700; }
   button.danger { background:transparent; border-color:var(--red); color:var(--red); font-weight:700; }
+  button.warn { background:transparent; border-color:var(--orange); color:var(--orange); font-weight:700; }
   button:disabled { opacity:.45; cursor:default; }
   button:focus-visible, input:focus-visible, select:focus-visible, a:focus-visible { outline:3px solid var(--orange); outline-offset:2px; }
   main { max-width:1180px; margin:0 auto; padding:18px; display:grid; gap:16px; }
@@ -58,7 +59,9 @@
   .tx .line.a { align-self:flex-start; background:var(--them); border-bottom-left-radius:5px; }
   .tx .line.b { align-self:flex-end; background:var(--blue); border-bottom-right-radius:5px; }
   .tx .meta { display:block; font-size:11px; color:rgba(255,255,255,.65); margin-bottom:2px; }
-  .pair-foot { padding:8px 12px; border-top:1px solid var(--line); display:flex; justify-content:flex-end; }
+  .pair-foot { padding:8px 12px; border-top:1px solid var(--line); display:flex; justify-content:flex-end; gap:8px; align-items:center; flex-wrap:wrap; }
+  .pair.is-frozen { border-color:var(--orange); }
+  .pair-frozen-note { margin-right:auto; color:var(--orange); font-size:13px; font-weight:700; }
   .flag-list { display:flex; flex-direction:column; gap:8px; margin-bottom:14px; max-height:240px; overflow:auto; }
   .flag-heading { margin:0; font-size:14px; color:var(--red); letter-spacing:.04em; text-transform:uppercase; }
   .flag { border-radius:14px; padding:10px 12px; background:rgba(255,159,10,.14); border:1px solid var(--orange); }
@@ -123,8 +126,10 @@
       <h2>2. Roster &amp; pairing</h2>
       <div class="row" style="margin-bottom:12px">
         <button type="button" class="good" id="btnAutoPair" disabled>Auto-pair</button>
+        <button type="button" class="warn" id="btnFreeze" disabled aria-pressed="false">Freeze chat</button>
         <span class="muted" id="rosterCount">0 students</span>
       </div>
+      <p class="muted" id="freezeNote">Freeze chat pauses sending for every student. They stay joined and paired. Lock level is separate.</p>
       <div class="roster" id="roster"><div class="empty">No class yet. Create a session, then wait until the hub says Live hub.</div></div>
       <p class="muted" id="rosterHelp">Live hub and an empty roster means no one has joined yet. A name that says “opening chat line” has reached this page, but the school network has not opened the chat line. “Unpaired” means they are ready to pair. Tap two unpaired students, or use Auto-pair. The first name in a pair starts.</p>
     </section>
@@ -222,22 +227,67 @@
     var other = pair.a === sid ? pair.b : pair.a;
     return { type: 'paired', pairId: pair.id, partner: { name: (session.students[other] || {}).name || 'Partner' },
       role: pair.a === sid ? 'first' : 'second', level: pair.level || session.level, locked: session.locked,
-      convoId: pair.convoId || null, step: pair.step || 0 };
+      convoId: pair.convoId || null, step: pair.step || 0,
+      classFrozen: !!session.frozen, pairFrozen: !!pair.frozen };
+  }
+  function freezeMsg(sid) {
+    var st = session.students[sid];
+    var pair = st && st.pairId && session.pairs[st.pairId];
+    return { type: 'freeze', classFrozen: !!session.frozen, pairFrozen: !!(pair && pair.frozen) };
+  }
+  function pushFreeze(sid) { send(sid, freezeMsg(sid)); }
+  function pushFreezeAll() { Object.keys(session.students).forEach(pushFreeze); }
+  function syncFreezeButton() {
+    var b = $('btnFreeze');
+    var note = $('freezeNote');
+    if (!b) return;
+    var on = !!(session && session.frozen);
+    b.disabled = !session;
+    b.textContent = on ? 'Unfreeze chat' : 'Freeze chat';
+    b.className = on ? 'good' : 'warn';
+    b.setAttribute('aria-pressed', on ? 'true' : 'false');
+    if (note) note.textContent = on
+      ? 'Chat is paused for the whole class. Students stay joined and paired. Tap Unfreeze chat when they may send again.'
+      : 'Freeze chat pauses sending for every student. They stay joined and paired. Lock level is separate.';
+  }
+  function toggleClassFreeze() {
+    if (!session) return;
+    session.frozen = !session.frozen;
+    save();
+    pushFreezeAll();
+    syncFreezeButton();
+    renderPairs();
+    toast(session.frozen ? 'Chat paused for the class' : 'Chat resumed for the class');
+  }
+  function togglePairFreeze(id) {
+    if (!session || !session.pairs[id]) return;
+    var pair = session.pairs[id];
+    pair.frozen = !pair.frozen;
+    save();
+    pushFreeze(pair.a);
+    pushFreeze(pair.b);
+    renderPairs();
+    var A = (session.students[pair.a] || {}).name || 'Student';
+    var B = (session.students[pair.b] || {}).name || 'Student';
+    toast((pair.frozen ? 'Chat paused for ' : 'Chat resumed for ') + A + ' and ' + B);
   }
   function makePair(a, b) {
     var id = 'p' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
-    var pair = { id: id, a: a, b: b, level: session.level, convoId: null, step: 0, transcript: [] };
+    var pair = { id: id, a: a, b: b, level: session.level, convoId: null, step: 0, transcript: [], frozen: false };
     session.pairs[id] = pair; session.pairOrder.push(id);
     session.students[a].pairId = id; session.students[b].pairId = id;
     send(a, pairMsg(pair, a)); send(b, pairMsg(pair, b));
+    pushFreeze(a); pushFreeze(b);
     save();
     return pair;
   }
   function unpair(id) {
     var pair = session.pairs[id]; if (!pair) return;
-    [pair.a, pair.b].forEach(function (sid) { if (session.students[sid]) session.students[sid].pairId = null; send(sid, { type: 'unpaired' }); });
+    var sides = [pair.a, pair.b];
+    sides.forEach(function (sid) { if (session.students[sid]) session.students[sid].pairId = null; send(sid, { type: 'unpaired' }); });
     delete session.pairs[id];
     session.pairOrder = session.pairOrder.filter(function (x) { return x !== id; });
+    sides.forEach(pushFreeze);
     save(); renderRoster(); renderPairs();
   }
   function unpairedOnline() {
@@ -294,6 +344,7 @@
     else if (online && online < ids.length) count += ' · ' + online + ' connected';
     $('rosterCount').textContent = count;
     $('btnAutoPair').disabled = !session || unpairedOnline().length < 2;
+    syncFreezeButton();
     if (!ids.length) { box.appendChild(el('div', 'empty', rosterEmptyText())); return; }
     ids.sort(function (x, y) { return session.students[x].joinedAt - session.students[y].joinedAt; }).forEach(function (sid) {
       var s = session.students[sid];
@@ -357,7 +408,10 @@
       var pair = session.pairs[id]; if (!pair) return;
       var A = session.students[pair.a] || { name: '?' }, B = session.students[pair.b] || { name: '?' };
       var pairFlags = (session.flags || []).filter(function (f) { return f.sid === pair.a || f.sid === pair.b || f.pairId === id; });
-      var card = el('div', 'pair' + (pairFlags.length ? ' has-flag' : '')); card.setAttribute('data-pair', id);
+      var paused = !!(pair.frozen || session.frozen);
+      var card = el('div', 'pair' + (pairFlags.length ? ' has-flag' : '') + (paused ? ' is-frozen' : '')); card.setAttribute('data-pair', id);
+      card.setAttribute('data-frozen', paused ? 'yes' : 'no');
+      card.setAttribute('data-pair-frozen', pair.frozen ? 'yes' : 'no');
       var head = el('div', 'pair-head');
       var names = el('div', 'pair-names');
       names.appendChild(el('span', 'dot' + (A.online ? ' on' : ''))); names.appendChild(el('span', '', A.name));
@@ -403,8 +457,15 @@
       });
       card.appendChild(tx);
       var foot = el('div', 'pair-foot');
+      if (session.frozen) foot.appendChild(el('span', 'pair-frozen-note', 'Class chat is paused'));
+      else if (pair.frozen) foot.appendChild(el('span', 'pair-frozen-note', 'This pair is paused'));
+      var fb = el('button', pair.frozen ? 'good' : 'warn', pair.frozen ? 'Unfreeze pair' : 'Freeze pair');
+      fb.type = 'button';
+      fb.setAttribute('data-role', 'freeze-pair');
+      fb.setAttribute('aria-pressed', pair.frozen ? 'true' : 'false');
+      fb.addEventListener('click', function () { togglePairFreeze(id); });
       var ub = el('button', '', 'Unpair'); ub.type = 'button'; ub.addEventListener('click', function () { unpair(id); });
-      foot.appendChild(ub); card.appendChild(foot);
+      foot.appendChild(fb); foot.appendChild(ub); card.appendChild(foot);
       box.appendChild(card);
       tx.scrollTop = tx.scrollHeight;
     });
@@ -419,9 +480,10 @@
       var hinted = connName(sid);
       var name = String(data.name || hinted || 'Student').trim().split(/\s+/)[0].slice(0, 18) || 'Student';
       session.students[sid] = { id: sid, name: name, online: true, linking: false, pairId: prev ? prev.pairId : null, joinedAt: prev ? prev.joinedAt : Date.now() };
-      send(sid, { type: 'welcome', className: session.className || 'Italian class', level: session.level, locked: session.locked });
+      send(sid, { type: 'welcome', className: session.className || 'Italian class', level: session.level, locked: session.locked, classFrozen: !!session.frozen });
       var pair = session.students[sid].pairId && session.pairs[session.students[sid].pairId];
       if (pair) { send(sid, pairMsg(pair, sid)); send(partnerOf(pair, sid), { type: 'partner_status', online: true }); }
+      pushFreeze(sid);
       save(); renderRoster(); renderPairs();
       if (!(prev && prev.online && prev.name === name)) toast(name + ' joined');
       return;
@@ -437,6 +499,7 @@
     if (!pr || (data.pairId && data.pairId !== pr.id)) return;
     var other = partnerOf(pr, sid);
     if (data.type === 'line') {
+      if (session.frozen || pr.frozen) return;
       var text = String(data.text || '').trim().slice(0, 300);
       if (!text) return;
       var lineHit = window.IgcSafety && IgcSafety.scan(text);
@@ -645,7 +708,7 @@
   function createSession() {
     var code = makeCode();
     session = { code: code, className: ($('className').value || '').trim().slice(0, 40), pin: ($('pin').value || '').trim().slice(0, 8),
-      level: $('levelSel').value, locked: $('lockLevel').checked, students: {}, pairs: {}, pairOrder: [], flags: [], createdAt: Date.now(), active: true, ended: false };
+      level: $('levelSel').value, locked: $('lockLevel').checked, frozen: false, students: {}, pairs: {}, pairOrder: [], flags: [], createdAt: Date.now(), active: true, ended: false };
     save();
     $('btnCreate').disabled = true;
     $('hubHelp').hidden = true;
@@ -672,6 +735,8 @@
     session.pairs = session.pairs || {};
     session.pairOrder = session.pairOrder || [];
     session.students = session.students || {};
+    session.frozen = !!session.frozen;
+    Object.keys(session.pairs).forEach(function (id) { session.pairs[id].frozen = !!session.pairs[id].frozen; });
     session.active = true;
     session.ended = false;
     Object.keys(session.students).forEach(function (sid) { session.students[sid].online = false; });
@@ -734,6 +799,7 @@
   $('btnReconnect').addEventListener('click', reconnectHub);
   $('btnEnd').addEventListener('click', endSession);
   $('btnAutoPair').addEventListener('click', autoPair);
+  $('btnFreeze').addEventListener('click', toggleClassFreeze);
   $('levelSel').addEventListener('change', onLevel);
   $('lockLevel').addEventListener('change', onLevel);
   $('btnCopyLink').addEventListener('click', function () {
