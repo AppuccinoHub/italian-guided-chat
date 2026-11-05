@@ -41,6 +41,7 @@
   .stu .av { width:28px; height:28px; border-radius:50%; display:grid; place-items:center; background:linear-gradient(145deg,#64d2ff,#007AFF); font-weight:700; font-size:13px; color:#fff; }
   .stu.paired .av { background:linear-gradient(145deg,#30d158,#64d2ff); }
   .stu.offline { opacity:.5; }
+  .stu.linking { border-color:var(--orange); }
   .stu[aria-pressed="true"] { border-color:var(--orange); box-shadow:0 0 0 2px var(--orange); }
   .stu small { color:var(--dim); }
   .empty { color:var(--dim); font-size:14px; }
@@ -115,7 +116,7 @@
         <div class="row" style="justify-content:center"><span class="pill off" id="hubStatus">Offline</span><button type="button" id="btnCopyLink">Copy student link</button><button type="button" id="btnReconnect" hidden>Reconnect hub</button></div>
         <p class="url">Students open: <a id="joinUrl" href="#" target="_blank" rel="noopener"></a></p>
       </div>
-      <div class="help" id="hubHelp" hidden>The class hub could not reconnect. Check the internet, then tap <b>Reconnect hub</b>. The class code stays the same. If school Wi‑Fi blocks the connection tool, students can use <b>Try both sides</b> on one computer.</div>
+      <div class="help" id="hubHelp" hidden>The hub is not live, so students cannot join. Check the internet, then tap <b>Reconnect hub</b>. The class code stays the same. If the hub says Live hub but a name stays on “opening chat line,” school Wi‑Fi is blocking the peer connection. Those students can use <b>Try both sides</b> on one computer.</div>
     </section>
 
     <section class="card">
@@ -124,8 +125,8 @@
         <button type="button" class="good" id="btnAutoPair" disabled>Auto-pair</button>
         <span class="muted" id="rosterCount">0 students</span>
       </div>
-      <div class="roster" id="roster"><div class="empty">Waiting for students…</div></div>
-      <p class="muted">Tap two unpaired students to pair them, or use Auto-pair. The first name in a pair starts. After a refresh, names stay here and students rejoin with the same code.</p>
+      <div class="roster" id="roster"><div class="empty">No class yet. Create a session, then wait until the hub says Live hub.</div></div>
+      <p class="muted" id="rosterHelp">Live hub and an empty roster means no one has joined yet. A name that says “opening chat line” has reached this page, but the school network has not opened the chat line. “Unpaired” means they are ready to pair. Tap two unpaired students, or use Auto-pair. The first name in a pair starts.</p>
     </section>
   </div>
 
@@ -137,6 +138,7 @@
 </main>
 <div class="toast" id="toast" role="status"></div>
 
+<script src="net.js"></script>
 <script src="safety.js"></script>
 <script src="vendor/peerjs.min.js"></script>
 <script>
@@ -145,6 +147,7 @@
   var STORAGE = 'italianGuidedTeacher_v1';
   var $ = function (id) { return document.getElementById(id); };
   var session = null;   // { code, className, pin, level, locked, students{}, pairs{}, pairOrder[], createdAt }
+  var hubLive = false;
   var peer = null;
   var conns = {};
   var picked = [];
@@ -206,7 +209,14 @@
   }
   function load() { try { return JSON.parse(localStorage.getItem(STORAGE) || 'null'); } catch (e) { return null; } }
 
-  function setHub(live, text) { var e = $('hubStatus'); e.textContent = text || (live ? 'Live' : 'Offline'); e.className = 'pill ' + (live ? 'live' : 'off'); }
+  function setHub(live, text) {
+    hubLive = !!live;
+    var e = $('hubStatus');
+    e.textContent = text || (live ? 'Live' : 'Offline');
+    e.className = 'pill ' + (live ? 'live' : 'off');
+    if ($('roster')) renderRoster();
+    if ($('pairs')) renderPairs();
+  }
 
   function pairMsg(pair, sid) {
     var other = pair.a === sid ? pair.b : pair.a;
@@ -243,21 +253,62 @@
     toast(n ? n + (n === 1 ? ' pair made' : ' pairs made') + (list.length % 2 ? '. One student is waiting for a partner.' : '') : 'Need two unpaired students');
   }
 
+  function rosterEmptyText() {
+    if (!session) return 'No class yet. Create a session, then wait until the hub says Live hub.';
+    if (!hubLive) return 'The hub is not live, so students cannot join. Tap Reconnect hub. The class code stays the same.';
+    return 'No students yet. When a Chromebook joins with the code, the name shows up here.';
+  }
+  function pairsEmptyText() {
+    if (!session) return 'No pairs yet. Start a session, let students join, then pair them.';
+    if (!hubLive) return 'No pairs yet. The hub is not live, so nobody can chat.';
+    var ids = Object.keys(session.students);
+    var online = 0, linking = 0;
+    ids.forEach(function (sid) {
+      var s = session.students[sid];
+      if (s.online) online += 1;
+      else if (s.linking) linking += 1;
+    });
+    if (online >= 2) return 'Students are connected but unpaired. Tap two names, or use Auto-pair, so they can chat.';
+    if (online === 1) return 'One student is connected. A pair needs a second student.';
+    if (linking) return 'A student reached the hub, but the chat line is not open yet. If the name stays on "opening chat line," school Wi-Fi is blocking the peer connection. Use Try both sides on one computer.';
+    return 'No pairs yet. Students show up above after they join. Pair them before they can text each other.';
+  }
+  function studentStatus(s, partner) {
+    if (s.linking && !s.online) return '· opening chat line';
+    if (!s.online) return '· offline';
+    if (partner) return '· with ' + partner.name;
+    return '· unpaired';
+  }
   function renderRoster() {
     var box = $('roster'); box.textContent = '';
     var ids = session ? Object.keys(session.students) : [];
-    $('rosterCount').textContent = ids.length + (ids.length === 1 ? ' student' : ' students');
-    $('btnAutoPair').disabled = !session;
-    if (!ids.length) { box.appendChild(el('div', 'empty', 'Waiting for students…')); return; }
+    var online = 0, linking = 0;
+    ids.forEach(function (sid) {
+      var s = session.students[sid];
+      if (s.online) online += 1;
+      else if (s.linking) linking += 1;
+    });
+    var count = ids.length + (ids.length === 1 ? ' student' : ' students');
+    if (!ids.length) count = '0 students';
+    else if (linking && !online) count += ' · opening the chat line';
+    else if (online && online < ids.length) count += ' · ' + online + ' connected';
+    $('rosterCount').textContent = count;
+    $('btnAutoPair').disabled = !session || unpairedOnline().length < 2;
+    if (!ids.length) { box.appendChild(el('div', 'empty', rosterEmptyText())); return; }
     ids.sort(function (x, y) { return session.students[x].joinedAt - session.students[y].joinedAt; }).forEach(function (sid) {
       var s = session.students[sid];
       var flagged = (session.flags || []).some(function (f) { return f.sid === sid; });
-      var b = el('button', 'stu' + (s.pairId ? ' paired' : '') + (s.online ? '' : ' offline') + (flagged ? ' flagged' : ''));
+      var cls = 'stu';
+      if (s.pairId) cls += ' paired';
+      if (s.linking && !s.online) cls += ' linking';
+      else if (!s.online) cls += ' offline';
+      if (flagged) cls += ' flagged';
+      var b = el('button', cls);
       b.type = 'button'; b.setAttribute('data-id', sid); b.setAttribute('aria-pressed', picked.indexOf(sid) >= 0 ? 'true' : 'false');
-      var av = el('span', 'av', s.name.charAt(0).toUpperCase());
-      b.appendChild(av); b.appendChild(document.createTextNode(s.name + ' '));
+      var av = el('span', 'av', (s.name || '?').charAt(0).toUpperCase());
+      b.appendChild(av); b.appendChild(document.createTextNode((s.name || 'Student') + ' '));
       var partner = s.pairId && session.pairs[s.pairId] ? session.students[session.pairs[s.pairId].a === sid ? session.pairs[s.pairId].b : session.pairs[s.pairId].a] : null;
-      b.appendChild(el('small', '', s.online ? (partner ? '· with ' + partner.name : '· unpaired') : '· offline'));
+      b.appendChild(el('small', '', studentStatus(s, partner)));
       if (flagged) b.appendChild(el('small', 'flag-pill', ' FLAG'));
       b.addEventListener('click', function () { pick(sid); });
       box.appendChild(b);
@@ -265,7 +316,12 @@
   }
   function pick(sid) {
     var s = session.students[sid];
-    if (!s || s.pairId || !s.online) { toast(s && s.pairId ? s.name + ' is already paired' : 'That student is offline'); return; }
+    if (!s || s.pairId || !s.online) {
+      if (s && s.pairId) toast(s.name + ' is already paired');
+      else if (s && s.linking) toast(s.name + ' is still opening the chat line');
+      else toast('That student is offline');
+      return;
+    }
     var i = picked.indexOf(sid);
     if (i >= 0) picked.splice(i, 1); else picked.push(sid);
     if (picked.length === 2) { var p = makePair(picked[0], picked[1]); picked = []; toast(session.students[p.a].name + ' + ' + session.students[p.b].name + ' paired'); renderPairs(); }
@@ -296,7 +352,7 @@
   function renderPairs() {
     var box = $('pairs'); box.textContent = '';
     renderFlagList(box);
-    if (!session || !session.pairOrder.length) { box.appendChild(el('div', 'empty', 'No pairs yet')); return; }
+    if (!session || !session.pairOrder.length) { box.appendChild(el('div', 'empty', pairsEmptyText())); return; }
     session.pairOrder.forEach(function (id) {
       var pair = session.pairs[id]; if (!pair) return;
       var A = session.students[pair.a] || { name: '?' }, B = session.students[pair.b] || { name: '?' };
@@ -360,13 +416,14 @@
     if (!session || !data || typeof data !== 'object') return;
     if (data.type === 'join') {
       var prev = session.students[sid];
-      var name = String(data.name || 'Student').trim().split(/\s+/)[0].slice(0, 18) || 'Student';
-      session.students[sid] = { id: sid, name: name, online: true, pairId: prev ? prev.pairId : null, joinedAt: prev ? prev.joinedAt : Date.now() };
+      var hinted = connName(sid);
+      var name = String(data.name || hinted || 'Student').trim().split(/\s+/)[0].slice(0, 18) || 'Student';
+      session.students[sid] = { id: sid, name: name, online: true, linking: false, pairId: prev ? prev.pairId : null, joinedAt: prev ? prev.joinedAt : Date.now() };
       send(sid, { type: 'welcome', className: session.className || 'Italian class', level: session.level, locked: session.locked });
       var pair = session.students[sid].pairId && session.pairs[session.students[sid].pairId];
       if (pair) { send(sid, pairMsg(pair, sid)); send(partnerOf(pair, sid), { type: 'partner_status', online: true }); }
       save(); renderRoster(); renderPairs();
-      toast(name + ' joined');
+      if (!(prev && prev.online && prev.name === name)) toast(name + ' joined');
       return;
     }
     var st = session.students[sid]; if (!st) return;
@@ -406,10 +463,35 @@
     }
   }
 
+  function connSid(conn) {
+    return String((conn.metadata && conn.metadata.studentId) || String(conn.peer).split('-s-').pop()).replace(/[^a-zA-Z0-9]/g, '');
+  }
+  function connName(sid) {
+    var conn = conns[sid];
+    var raw = conn && conn.metadata && conn.metadata.name;
+    return String(raw || '').trim().split(/\s+/)[0].slice(0, 18);
+  }
+  function noteLinking(sid, name) {
+    if (!session || !name) return;
+    var prev = session.students[sid];
+    if (prev && prev.online) return;
+    session.students[sid] = {
+      id: sid,
+      name: name,
+      online: false,
+      linking: true,
+      pairId: prev ? prev.pairId : null,
+      joinedAt: prev ? prev.joinedAt : Date.now()
+    };
+    save();
+    renderRoster();
+    renderPairs();
+  }
   function onConnection(conn) {
-    var sid = String((conn.metadata && conn.metadata.studentId) || String(conn.peer).split('-s-').pop()).replace(/[^a-zA-Z0-9]/g, '');
+    var sid = connSid(conn);
     if (conns[sid] && conns[sid] !== conn) { try { conns[sid].close(); } catch (e) {} }
     conns[sid] = conn;
+    noteLinking(sid, connName(sid));
     conn.on('data', function (d) { onMsg(sid, d); });
     conn.on('close', function () {
       if (conns[sid] !== conn) return;
@@ -417,6 +499,7 @@
       var s = session && session.students[sid];
       if (s) {
         s.online = false;
+        s.linking = false;
         var pair = s.pairId && session.pairs[s.pairId];
         if (pair) send(partnerOf(pair, sid), { type: 'partner_status', online: false });
         picked = picked.filter(function (x) { return x !== sid; });
@@ -446,6 +529,8 @@
       var attemptPeer = null;
       var settled = false;
       var reconnects = 0;
+      var reconnectTimer = null;
+      var quietTimer = null;
       var timer = setTimeout(function () { finish({ type: 'timeout', message: 'timeout' }); }, 15000);
       function finish(err) {
         if (settled) return;
@@ -457,11 +542,18 @@
           reject(err);
         } else resolve();
       }
-      try { attemptPeer = new Peer(teacherPeerId(code), { debug: 0 }); }
+      try { attemptPeer = new Peer(teacherPeerId(code), window.IgcNet ? IgcNet.peerOptions() : { debug: 0 }); }
       catch (e) { finish({ type: 'invalid-id', message: String(e && e.message || e) }); return; }
       peer = attemptPeer;
+      function markHubDown(note) {
+        if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
+        setHub(false, 'Not connected');
+        setHubNote(note);
+        $('btnReconnect').hidden = false;
+      }
       attemptPeer.on('open', function () {
-        reconnects = 0;
+        if (quietTimer) clearTimeout(quietTimer);
+        quietTimer = setTimeout(function () { reconnects = 0; }, 5000);
         setHub(true, 'Live hub');
         $('hubHelp').hidden = true;
         $('btnReconnect').hidden = true;
@@ -471,28 +563,25 @@
       attemptPeer.on('error', function (err) {
         if (err && err.type === 'peer-unavailable') return;
         if (!settled) finish(err || { type: 'network', message: 'network' });
-        else if (reconnects > 2) {
-          setHub(false, 'Not connected');
-          setHubNote(hubFailureText(err, code));
-          $('btnReconnect').hidden = false;
-        }
+        else if (reconnects > 2) markHubDown(hubFailureText(err, code));
       });
       attemptPeer.on('disconnected', function () {
         if (!settled || !session || peer !== attemptPeer) return;
+        if (reconnectTimer) return;
         reconnects += 1;
         if (reconnects > 2) {
-          setHub(false, 'Not connected');
-          setHubNote('The class hub dropped. Tap Reconnect hub. The code is still ' + code + '.');
-          $('btnReconnect').hidden = false;
+          markHubDown('The class hub dropped. Tap Reconnect hub. The code is still ' + code + '.');
           return;
         }
         setHub(false, 'Reconnecting');
         setHubNote('Reconnecting. The code has not changed.');
-        try { attemptPeer.reconnect(); } catch (e) {
-          setHub(false, 'Not connected');
-          setHubNote(hubFailureText({ type: 'network' }, code));
-          $('btnReconnect').hidden = false;
-        }
+        reconnectTimer = setTimeout(function () {
+          reconnectTimer = null;
+          if (!session || peer !== attemptPeer) return;
+          try { attemptPeer.reconnect(); } catch (e) {
+            markHubDown(hubFailureText({ type: 'network' }, code));
+          }
+        }, 500);
       });
     });
   }
