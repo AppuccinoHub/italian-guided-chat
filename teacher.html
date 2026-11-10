@@ -148,10 +148,10 @@
     <h2>Today's question</h2>
     <p class="muted" id="questionHint">Suggestions for this level are below. If you write your own question and leave starters blank, students will not get frames.</p>
     <div class="row">
-      <label class="field">Question<input id="todayQuestion" maxlength="160" placeholder="Cosa facevi da bambino/a?"></label>
+      <label class="field">Question<input id="todayQuestion" maxlength="160" placeholder="Cosa facevi da bambino?"></label>
       <label class="field">For<select id="questionScope"><option value="class">Whole class</option></select></label>
     </div>
-    <label class="field">Starters, one per line<textarea id="todayStarters" rows="3" maxlength="500" placeholder="Da bambino/a giocavo…"></textarea></label>
+    <label class="field">Starters, one per line<textarea id="todayStarters" rows="3" maxlength="500" placeholder="Da bambino giocavo…"></textarea></label>
     <div class="row" style="margin-top:8px">
       <button type="button" id="btnQuestion">Set question</button>
       <button type="button" id="btnClearQuestion">Clear</button>
@@ -1219,7 +1219,10 @@
   function builtinQuestion(text) {
     var key = String(text || '').replace(/\s+/g, ' ').trim().toLowerCase();
     for (var i = 0; i < questionBank.length; i++) {
-      if (String(questionBank[i].q || '').replace(/\s+/g, ' ').trim().toLowerCase() === key) return questionBank[i];
+      var forms = [questionBank[i].q].concat(questionBank[i].also || []);
+      for (var j = 0; j < forms.length; j++) {
+        if (String(forms[j] || '').replace(/\s+/g, ' ').trim().toLowerCase() === key) return questionBank[i];
+      }
     }
     return null;
   }
@@ -1229,13 +1232,16 @@
     box.textContent = '';
     var level = session ? session.level : ($('levelSel') && $('levelSel').value);
     questionBank.filter(function (q) { return String(q.level) === String(level); }).forEach(function (q) {
-      var b = el('button', '', q.q);
-      b.type = 'button';
-      b.addEventListener('click', function () {
-        $('todayQuestion').value = q.q;
-        if (!$('todayStarters').value.trim()) $('todayStarters').value = (q.starters || []).join('\n');
+      [q.q].concat(q.also || []).forEach(function (form) {
+        if (!form) return;
+        var b = el('button', '', form);
+        b.type = 'button';
+        b.addEventListener('click', function () {
+          $('todayQuestion').value = form;
+          if (!$('todayStarters').value.trim()) $('todayStarters').value = (q.starters || []).join('\n');
+        });
+        box.appendChild(b);
       });
-      box.appendChild(b);
     });
   }
   function startersFromInput() {

@@ -32,32 +32,35 @@
     },
     {
       "level": "3",
-      "q": "Cosa facevi da bambino/a?",
-      "starters": ["Da bambino/a giocavo…", "Da piccolo/a andavo…", "Quando ero piccolo/a mi piaceva…"],
-      "example": "Da bambino/a giocavo a calcio."
+      "q": "Cosa facevi da bambino?",
+      "also": ["Cosa facevi da bambina?"],
+      "starters": ["Da bambino giocavo…", "Da bambina giocavo…", "Da piccolo andavo…", "Da piccola andavo…", "Quando ero piccolo mi piaceva…", "Quando ero piccola mi piaceva…"],
+      "example": "Da bambino giocavo a calcio. / Da bambina giocavo a calcio."
     },
     {
       "level": "3",
-      "q": "Dove abitavi da piccolo/a?",
-      "starters": ["Da piccolo/a abitavo…", "Abitavo a…", "Con la mia famiglia abitavo…"],
-      "example": "Da piccolo/a abitavo a Napoli."
+      "q": "Com'eri da bambino?",
+      "also": ["Com'eri da bambina?"],
+      "starters": ["Da bambino ero…", "Da bambina ero…", "Ero un bambino…", "Ero una bambina…"],
+      "example": "Da bambino ero timido. / Da bambina ero timida."
     },
     {
       "level": "3",
-      "q": "Com'eri da bambino/a?",
-      "starters": ["Da bambino/a ero…", "Ero un bambino…", "Ero una bambina…"],
-      "example": "Da bambino/a ero timido."
+      "q": "Dove abitavi da piccolo?",
+      "also": ["Dove abitavi da piccola?"],
+      "starters": ["Da piccolo abitavo…", "Da piccola abitavo…", "Abitavo a…", "Con la mia famiglia abitavo…"],
+      "example": "Da piccolo abitavo a Napoli. / Da piccola abitavo a Napoli."
     },
     {
       "level": "3",
       "q": "Qual era il tuo gioco preferito?",
-      "starters": ["Il mio gioco preferito era…", "Da bambino/a giocavo a…", "Mi piaceva…"],
+      "starters": ["Il mio gioco preferito era…", "Da bambino giocavo a…", "Da bambina giocavo a…", "Mi piaceva…"],
       "example": "Il mio gioco preferito era il calcio."
     },
     {
       "level": "3",
       "q": "Che cosa ti piaceva mangiare?",
-      "starters": ["Mi piaceva mangiare…", "Da bambino/a mangiavo…", "Mi piacevano…"],
+      "starters": ["Mi piaceva mangiare…", "Da bambino mangiavo…", "Da bambina mangiavo…", "Mi piacevano…"],
       "example": "Mi piaceva mangiare la pizza."
     },
     {

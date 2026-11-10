@@ -643,24 +643,129 @@
     var list = (state.cls && state.cls.starters) || [];
     return list.filter(Boolean);
   }
-  function ideaList(asAnswers) {
-    if (asAnswers && partnerAskedQuestion() && currentStarters().length) return currentStarters().slice(0, 4);
-    if (String(state.level) === "3") {
-      var bank = (state.questions || []).filter(function (q) { return String(q.level) === "3"; });
-      if (asAnswers) {
-        var starters = [];
-        bank.forEach(function (q) { (q.starters || []).forEach(function (s) { starters.push(s); }); });
-        if (starters.length >= 2) return starters.slice(0, 4);
-      } else {
-        var qs = bank.map(function (q) { return q.q; }).filter(Boolean);
-        if (qs.length >= 2) return qs.slice(0, 4);
+  var ANSWER_MAP = {
+    "come stai": ["Sto bene, grazie.", "Bene, e tu?", "Così così.", "Non c'è male."],
+    "come va": ["Sto bene, grazie.", "Bene, e tu?", "Così così.", "Non c'è male."],
+    "come ti chiami": ["Mi chiamo…"],
+    "di dove sei": ["Sono di…"],
+    "hai fame": ["Sì, ho fame.", "No, non ho fame.", "Ho un po' di fame."],
+    "hai sete": ["Sì, ho sete.", "No, non ho sete."],
+    "che cosa fai questo fine settimana": ["Vado al mare.", "Resto a casa.", "Esco con gli amici."],
+    "con chi vai": ["Esco con gli amici."],
+    "che cosa ne pensi": ["Secondo me è interessante."],
+    "e tu che cosa ne pensi": ["Sono d'accordo.", "Non sono d'accordo.", "Perché è importante.", "Secondo me è interessante."],
+    "ti piace": ["Sì, mi piace…", "No, non mi piace…"],
+    "perche": ["Perché è importante.", "Perché non è realistico."]
+  };
+  var GREETINGS = { ciao: true, buongiorno: true, salve: true, buonasera: true, "a dopo": true, "a domani": true, arrivederci: true, "ci vediamo": true, "buona giornata": true };
+  function phraseFold(s) {
+    return window.IgcCoach ? IgcCoach.fold(s) : String(s || "").toLowerCase().replace(/[^a-z0-9' ]+/g, " ").replace(/\s+/g, " ").trim();
+  }
+  function answerPhraseSet() {
+    var set = Object.create(null);
+    Object.keys(ANSWER_MAP).forEach(function (key) {
+      ANSWER_MAP[key].forEach(function (p) { set[phraseFold(p)] = true; });
+    });
+    return set;
+  }
+  function isAskableQuestion(p) {
+    if (!/\?\s*$/.test(String(p || "").trim())) return false;
+    if (answerPhraseSet()[phraseFold(p)]) return false;
+    return true;
+  }
+  function mappedAnswers(text) {
+    var f = phraseFold(text);
+    var best = "";
+    Object.keys(ANSWER_MAP).forEach(function (key) {
+      if (f === key || f.indexOf(key) >= 0) {
+        if (key.length > best.length) best = key;
+      }
+    });
+    return best ? ANSWER_MAP[best] : null;
+  }
+  function questionEntry(text) {
+    var f = phraseFold(text);
+    var list = state.questions || [];
+    for (var i = 0; i < list.length; i++) {
+      var forms = [list[i].q].concat(list[i].also || []);
+      for (var j = 0; j < forms.length; j++) {
+        if (forms[j] && phraseFold(forms[j]) === f) return list[i];
       }
     }
-    var pool = phrasePool();
-    var wantQ = !asAnswers;
-    var picked = pool.filter(function (p) { return (window.IgcCoach ? IgcCoach.isQuestion(p) : /\?\s*$/.test(p)) === wantQ; });
-    if (picked.length < 2) picked = pool;
-    return picked.slice(0, 4);
+    return null;
+  }
+  function rememberPhrase(list, seen, phrase) {
+    var key = phraseFold(phrase);
+    if (!key || seen[key] || GREETINGS[key]) return;
+    seen[key] = true;
+    list.push(phrase);
+  }
+  function answerStepChips() {
+    var list = [];
+    var seen = Object.create(null);
+    function take(convo) {
+      (convo.steps || []).forEach(function (step) {
+        if (!/answer/i.test(step.prompt || "")) return;
+        (step.chips || []).forEach(function (chip) { rememberPhrase(list, seen, chip); });
+      });
+      (convo.suggestions || []).forEach(function (chip) {
+        if (isAskableQuestion(chip)) return;
+        rememberPhrase(list, seen, chip);
+      });
+    }
+    if (state.convo) take(state.convo);
+    if (list.length < 2) convosFor(state.level).forEach(take);
+    return list.slice(0, 4);
+  }
+  function answerIdeas() {
+    var last = state.lastIncoming || "";
+    var today = state.cls && state.cls.question;
+    if (last && today && phraseFold(last) === phraseFold(today) && currentStarters().length) return currentStarters().slice(0, 4);
+    var mapped = last ? mappedAnswers(last) : null;
+    if (mapped && mapped.length) return mapped.slice(0, 4);
+    var built = last ? questionEntry(last) : null;
+    if (built && built.starters && built.starters.length) return built.starters.slice(0, 4);
+    return answerStepChips();
+  }
+  function questionIdeas() {
+    if (String(state.level) === "3") {
+      var qs = [];
+      (state.questions || []).forEach(function (q) {
+        if (String(q.level) !== "3") return;
+        if (q.q) qs.push(q.q);
+        (q.also || []).forEach(function (alt) { if (alt) qs.push(alt); });
+      });
+      if (qs.length) return qs.slice(0, 4);
+    }
+    var list = [];
+    var seen = Object.create(null);
+    function add(phrases) {
+      (phrases || []).forEach(function (p) {
+        if (!isAskableQuestion(p)) return;
+        var key = phraseFold(p);
+        if (seen[key]) return;
+        seen[key] = true;
+        list.push(p);
+      });
+    }
+    var convo = state.convo;
+    if (convo) {
+      var steps = convo.steps || [];
+      var step = steps[state.step] || steps[0];
+      if (step) add(step.chips);
+      steps.forEach(function (s) { add(s.chips); });
+      add(convo.suggestions);
+    }
+    if (list.length < 2) {
+      convosFor(state.level).forEach(function (c) {
+        (c.steps || []).forEach(function (s) { add(s.chips); });
+        add(c.suggestions);
+      });
+    }
+    return list.slice(0, 4);
+  }
+  function ideaList(asAnswers) {
+    return asAnswers ? answerIdeas() : questionIdeas();
   }
   function starterStem(s) {
     return String(s || "").replace(/[…\.]+$/g, "").trim();
@@ -672,9 +777,7 @@
   }
   function starterBlock(text) {
     var stems = currentStarters();
-    var built = (state.questions || []).filter(function (q) {
-      return state.cls && state.cls.question && window.IgcCoach && IgcCoach.fold(q.q) === IgcCoach.fold(state.cls.question);
-    })[0];
+    var built = state.cls && state.cls.question ? questionEntry(state.cls.question) : null;
     for (var i = 0; i < stems.length; i++) {
       var stem = starterStem(stems[i]);
       if (!stem) continue;
@@ -690,6 +793,7 @@
     return null;
   }
   function showIdeas(student, raw, lead, ideas) {
+    hideIdle();
     addBubble(student.id, raw, "me", lead, { force: true });
     var help = student.root.querySelector("[data-role='help']");
     help.hidden = false;
@@ -748,6 +852,8 @@
       if (!student || student.root.hidden) return;
       var node = student.root.querySelector("[data-role='idle-nudge']");
       if (!node) return;
+      var help = student.root.querySelector("[data-role='help']");
+      if (help && !help.hidden) { node.hidden = true; return; }
       var show = idleEligible(student) && state.lastSentAt && (Date.now() - state.lastSentAt >= idleMs());
       node.hidden = !show;
       if (!show) return;

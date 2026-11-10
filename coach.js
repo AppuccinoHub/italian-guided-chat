@@ -61,6 +61,7 @@
       phrases.push(chip);
       learn(lex, chip);
     }
+    ["Non c'è male."].forEach(addPhrase);
     PRONOUNS.forEach(function (w) { lex[w] = true; });
     Object.keys(ALLOW).forEach(function (w) { lex[w] = true; });
     var english = Object.create(null);
