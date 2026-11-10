@@ -6,7 +6,7 @@
   var script = document.currentScript;
   var base = new URL("./", script && script.src ? script.src : location.href);
 
-  var NOTE = "Your partner only sees Italian that was sent.";
+  var NOTE = "Mistakes stay on your screen. Your partner only sees the corrected Italian.";
   var BLOCKED = "That does not look like Italian yet. Try a phrase chip, or write a real Italian sentence.";
   var FREE = "Now write your own message in Italian.";
   var NO_PARTNER = "No partner is connected, so this stayed here. Use Try both sides, or Join class.";
@@ -165,8 +165,8 @@
       R + " .joinbar button.quiet { background:var(--chip); color:var(--text); border:1px solid var(--chip-border); }",
       R + " .class-status { flex:1 1 100%; text-align:center; margin:0; font-size:15px; color:var(--soft); }",
       R + " .stage { flex:1; min-height:0; display:flex; justify-content:center; align-items:flex-start; padding:18px 20px 20px; overflow:hidden; }",
-      R + " .desk { display:flex; align-items:flex-start; justify-content:center; gap:18px; width:min(1120px, 100%); max-height:100%; min-height:0; }",
-      R + " .student { position:relative; flex:1 1 720px; width:auto; max-width:840px; min-width:0; min-height:0; max-height:100%; display:flex; flex-direction:column; background:var(--bg); overflow:hidden; border:1px solid #2c2c2e; border-radius:20px; box-shadow:0 16px 40px rgba(0,0,0,.35); }",
+      R + " .desk { display:flex; align-items:stretch; justify-content:center; gap:18px; width:min(1120px, 100%); height:100%; max-height:100%; min-height:0; }",
+      R + " .student { position:relative; flex:1 1 720px; width:auto; max-width:840px; min-width:0; min-height:0; height:100%; max-height:100%; display:flex; flex-direction:column; background:var(--bg); overflow:hidden; border:1px solid #2c2c2e; border-radius:20px; box-shadow:0 16px 40px rgba(0,0,0,.35); }",
       R + " .tips { flex:0 0 280px; width:280px; max-height:100%; overflow:auto; background:#141416; border:1px solid #2c2c2e; border-radius:20px; padding:16px 16px 18px; }",
       R + " .tips h2 { margin:0 0 8px; font-size:18px; line-height:1.25; }",
       R + " .tips-who { margin:0 0 12px; color:#fff; font-size:15px; font-weight:650; line-height:1.35; }",
@@ -183,7 +183,14 @@
       R + " .who-name { font-size:17px; font-weight:650; line-height:1.2; }",
       R + " .who-title { color:var(--soft); font-size:14px; line-height:1.3; }",
       R + " .note { flex-shrink:0; margin:0; color:var(--soft); padding:8px 16px; font-size:14px; line-height:1.35; text-align:center; }",
-      R + " .thread { flex:0 1 auto; min-height:0; max-height:min(320px, calc(100vh - 470px)); overflow:auto; padding:12px 14px; display:flex; flex-direction:column; justify-content:flex-end; gap:8px; }",
+      R + " .toast-line { margin:0; padding:8px 12px; text-align:center; font-weight:700; color:#1c1400; background:#ffd60a; }",
+      R + " .rotate-clock { flex-shrink:0; margin:0; padding:4px 12px; text-align:center; font-size:13px; font-weight:750; letter-spacing:.01em; color:#1c1400; background:#ffd60a; }",
+      R + " .rotate-clock.paused { background:#ff9f0a; color:#1c1400; }",
+      R + " .rotate-clock.bye { background:#0a84ff; color:#fff; }",
+      R + " .today-q { flex-shrink:0; margin:0; padding:8px 14px; background:#1c1c1e; border-bottom:1px solid #3a3a3c; font-size:14px; line-height:1.35; }",
+      R + " .today-q b { color:#ffd60a; }",
+      R + " .thread { flex:1 1 auto; min-height:0; overflow:auto; padding:12px 14px; display:flex; flex-direction:column; gap:8px; }",
+      R + " .thread-spacer { margin-top:auto; flex:0 0 0; }",
       R + " .empty { color:var(--soft); font-size:15px; line-height:1.4; text-align:left; margin:0; padding:12px 14px; background:#141416; border:1px solid #2c2c2e; border-radius:14px; }",
       R + " .bubble { max-width:36rem; padding:8px 14px; border-radius:18px; font-size:17px; line-height:1.35; word-break:break-word; }",
       R + " .bubble.me { align-self:flex-end; background:var(--me); color:#fff; border-bottom-right-radius:5px; }",
@@ -212,6 +219,16 @@
       R + " .composer input:focus { outline:0; border-color:var(--me); }",
       R + " .composer button { background:var(--me); color:#fff; border:0; border-radius:20px; min-width:72px; min-height:42px; font-weight:700; cursor:pointer; }",
       R + " .composer input:disabled, " + R + " .composer button:disabled { opacity:.45; cursor:default; }",
+      R + " .idle-nudge { margin:8px 16px 0; background:#2c2414; color:#ffe8c2; border:1px solid #7a5b20; border-radius:14px; padding:8px 12px; font-size:14px; line-height:1.4; }",
+      R + " .idea-row { display:flex; flex-wrap:wrap; gap:6px; margin-top:6px; }",
+      R + " .bubble .del { margin-left:8px; border:0; background:transparent; color:inherit; font-size:12px; font-weight:700; cursor:pointer; text-decoration:underline; }",
+      R + " .bubble mark { background:transparent; color:#ffd60a; font-weight:750; }",
+      R + " .gloss { flex:0 0 280px; width:280px; max-height:100%; overflow:auto; background:#141416; border:1px solid #2c2c2e; border-radius:20px; padding:14px; }",
+      R + " .gloss h2 { margin:0 0 6px; font-size:18px; }",
+      R + " .gloss p { margin:0 0 8px; color:var(--soft); font-size:14px; line-height:1.4; }",
+      R + " .gloss input { width:100%; min-height:40px; border-radius:12px; border:1px solid #3a3a3c; background:#1c1c1e; padding:8px 10px; }",
+      R + " .gloss-hit { display:block; width:100%; text-align:left; margin-top:6px; }",
+      R + " @media (max-width:900px) { " + R + " .gloss { flex:1 1 auto; width:auto; max-height:220px; } }",
       R + " button:focus-visible, " + R + " input:focus-visible, " + R + " select:focus-visible { outline:3px solid var(--orange); outline-offset:2px; }"
     ].join("\n");
     document.head.appendChild(style);
@@ -225,6 +242,7 @@
   function clearThread(student) {
     var thread = student.root.querySelector("[data-role='thread']");
     thread.textContent = "";
+    thread.appendChild(el("div", { class: "thread-spacer", "data-role": "thread-spacer" }));
     thread.appendChild(el("p", { class: "empty", "data-role": "empty", text: emptyCopy() }));
     student.step = 0;
     hideHelp(student);
@@ -235,24 +253,76 @@
     help.className = "help";
     help.textContent = "";
   }
-  function scrollThread(student) {
-    var thread = student.root.querySelector("[data-role='thread']");
-    thread.scrollTop = thread.scrollHeight;
+  function nearBottom(thread) {
+    return thread.scrollHeight - thread.scrollTop - thread.clientHeight < 48;
   }
-  function addBubble(studentId, text, kind, pendingWhy) {
+  function scrollThread(student, force) {
+    var thread = student.root.querySelector("[data-role='thread']");
+    if (force || thread.getAttribute("data-stick") !== "no") thread.scrollTop = thread.scrollHeight;
+  }
+  function watchThread(student) {
+    var thread = student.root.querySelector("[data-role='thread']");
+    if (thread.getAttribute("data-watched") === "yes") return;
+    thread.setAttribute("data-watched", "yes");
+    thread.addEventListener("scroll", function () {
+      thread.setAttribute("data-stick", nearBottom(thread) ? "yes" : "no");
+    });
+  }
+  function addBubble(studentId, text, kind, pendingWhy, opts) {
     var student = state.students[studentId];
     if (!student) return;
+    opts = opts || {};
     var thread = student.root.querySelector("[data-role='thread']");
+    watchThread(student);
+    var stick = nearBottom(thread);
     var empty = thread.querySelector("[data-role='empty']");
     if (empty) empty.remove();
     var bubble = document.createElement("div");
-    bubble.className = "bubble " + (pendingWhy ? "pending" : kind);
+    bubble.className = "bubble " + (pendingWhy && !opts.sent ? "pending" : kind);
     bubble.setAttribute("data-text", text);
-    bubble.setAttribute("data-sent", pendingWhy ? "false" : "true");
-    bubble.appendChild(el("span", { class: "line", text: text }));
-    if (pendingWhy) bubble.appendChild(el("span", { class: "why", text: pendingWhy }));
+    bubble.setAttribute("data-sent", opts.sent || !pendingWhy ? "true" : "false");
+    if (opts.lineId) bubble.setAttribute("data-line-id", opts.lineId);
+    if (opts.mine) bubble.setAttribute("data-mine", "yes");
+    if (opts.from) bubble.setAttribute("data-from", opts.from);
+    var line = el("span", { class: "line", text: text });
+    bubble.appendChild(line);
+    if (opts.from) bubble.insertBefore(el("span", { class: "why", text: opts.from }), line);
+    if (pendingWhy) {
+      bubble.setAttribute("data-why", pendingWhy);
+      bubble.appendChild(el("span", { class: "why", text: pendingWhy }));
+    }
+    if (opts.mine && opts.sent) {
+      var del = el("button", { type: "button", class: "del", "data-delete-line": opts.lineId, text: "Delete" });
+      bubble.appendChild(del);
+    }
     thread.appendChild(bubble);
-    scrollThread(student);
+    scrollThread(student, opts.force || stick);
+    try { rememberThread(); } catch (e) {}
+  }
+  function rememberThread() {
+    var msgs = [];
+    document.querySelectorAll("#italian-guided-chat [data-student='A'] .bubble").forEach(function (b) {
+      msgs.push({
+        text: b.getAttribute("data-text") || "",
+        kind: /\bme\b/.test(b.className) ? "me" : "them",
+        from: b.getAttribute("data-from") || "",
+        why: b.getAttribute("data-why") || ""
+      });
+    });
+    try { sessionStorage.setItem("italianGuidedThread", JSON.stringify(msgs.slice(-40))); } catch (e) {}
+  }
+  function restoreThread() {
+    if (!state.students.A) return;
+    var raw = null;
+    try { raw = sessionStorage.getItem("italianGuidedThread"); } catch (e) { return; }
+    if (!raw) return;
+    var msgs = [];
+    try { msgs = JSON.parse(raw) || []; } catch (e) { return; }
+    msgs.slice(-40).forEach(function (m) {
+      if (!m || !m.text) return;
+      var mine = m.kind === "me";
+      addBubble("A", m.text, mine ? "me" : "them", m.why || "", { sent: !m.why, mine: mine, from: m.from || "" });
+    });
   }
 
   /* ---------- turns ---------- */
@@ -277,15 +347,22 @@
       ? "Open Italian chat. Type whatever you want in Italian. The ideas below are optional."
       : "Open Italian chat. Type whatever you want in Italian.";
   }
+  function groupSize() {
+    if (state.both) return 2;
+    var n = state.cls && state.cls.groupSize;
+    return n && n > 1 ? n : 2;
+  }
+  function roleIndex(student) {
+    if (state.both) return student.id === "A" ? 0 : 1;
+    return (state.cls && typeof state.cls.roleIndex === "number") ? state.cls.roleIndex : (state.cls && state.cls.role === "second" ? 1 : 0);
+  }
   function hasTurn(student) {
     if (isOpenConvo()) return true;
     if (!shared()) return true;
     var steps = state.convo.steps || [];
     if (state.step >= steps.length) return true;
-    var firstSpeaker = state.step % 2 === 0;
-    if (state.both) return firstSpeaker ? student.id === "A" : student.id === "B";
-    if (student.id !== "A") return false;
-    return firstSpeaker === (state.cls.role === "first");
+    var size = groupSize();
+    return (state.step % size) === roleIndex(student);
   }
   function chipsFor(student) {
     if (isOpenConvo()) return ((state.convo && state.convo.suggestions) || []).slice();
@@ -304,7 +381,9 @@
   }
   function whoLabel(student) {
     if (state.mode === "class" && state.cls) {
-      return state.cls.partner ? state.cls.partner : (state.cls.name || "You");
+      var names = state.cls.partners || (state.cls.partner ? [state.cls.partner] : []);
+      if (names.length) return names.join(" + ");
+      return state.cls.name || "You";
     }
     return student.id === "A" ? "Student A" : "Student B";
   }
@@ -318,6 +397,8 @@
     student.root.setAttribute("data-open", isOpenConvo() ? "yes" : "no");
     if (chatFrozen()) {
       prompt.appendChild(el("span", { "data-role": "prompt-text", class: "waiting", text: "Teacher paused chat." }));
+    } else if (state.mode === "class" && state.cls && state.cls.phase === "goodbye" && classPaired()) {
+      prompt.appendChild(el("span", { "data-role": "prompt-text", class: "waiting", text: "Time to say goodbye in Italian." }));
     } else if (state.mode === "class" && !classPaired()) {
       var waitingText = "Join your teacher's class to start.";
       if (state.cls && state.cls.joined) waitingText = "Waiting for the teacher to pair you.";
@@ -336,8 +417,10 @@
     }
     var box = student.root.querySelector("[data-role='chips']");
     box.textContent = "";
+    var chipSource = chipsFor(student);
+    if (state.mode === "class" && state.cls && state.cls.phase === "goodbye" && classPaired() && window.IgcCoach) chipSource = IgcCoach.goodbyeList();
     if (!chatFrozen() && !(state.mode === "class" && !classPaired())) {
-      chipsFor(student).forEach(function (chip) {
+      chipSource.forEach(function (chip) {
         box.appendChild(el("button", { type: "button", "data-chip": chip, text: chip }));
       });
     }
@@ -390,9 +473,25 @@
     list.textContent = "";
     lines.forEach(function (line) { list.appendChild(el("li", { text: line })); });
   }
+  function renderToday() {
+    var text = (state.cls && state.cls.question) || "";
+    ["A", "B"].forEach(function (id) {
+      var student = state.students[id];
+      if (!student) return;
+      var node = student.root.querySelector("[data-role='today-q']");
+      if (!node) return;
+      if (!text || state.mode !== "class") { node.hidden = true; return; }
+      node.hidden = false;
+      node.textContent = "";
+      node.appendChild(el("b", { text: "Today's question — ask your partner: " }));
+      node.appendChild(document.createTextNode(text));
+    });
+  }
   function renderAll() {
     ["A", "B"].forEach(function (id) { if (state.students[id]) renderChrome(state.students[id]); });
     renderTips();
+    renderToday();
+    renderClock();
   }
   function maybeAdvanceShared(student, canon) {
     var steps = state.convo.steps || [];
@@ -411,27 +510,34 @@
   }
 
   /* ---------- sending ---------- */
-  function cross(fromId, line) {
+  function cross(fromId, line, lineId, original) {
     if (state.both) {
-      addBubble(fromId === "A" ? "B" : "A", line, "them", null);
+      addBubble(fromId === "A" ? "B" : "A", line, "them", null, { lineId: lineId, from: state.students[fromId] ? (fromId === "A" ? "Student A" : "Student B") : "" });
       return;
     }
     if (classPaired()) {
       classSend({
-        type: "line", pairId: state.cls.pairId, from: state.cls.name, text: line,
-        step: state.step, level: state.level, convoId: state.convo.id, at: Date.now()
+        type: "line", pairId: state.cls.pairId, from: state.cls.name, text: line, original: original || line,
+        lineId: lineId, step: state.step, level: state.level, convoId: state.convo && state.convo.id, at: Date.now(),
+        answeredQuestion: !!answeredToday(line)
       });
     }
   }
   function deliver(student, line, advanceWith) {
+    deliverCorrected(student, line, line, advanceWith, "");
+  }
+  function deliverCorrected(student, shown, outgoing, advanceWith, why) {
     hideHelp(student);
+    hideIdle();
+    var lineId = "m" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
     if (shared()) {
-      addBubble(student.id, line, "me", null);
-      if (advanceWith) maybeAdvanceShared(student, advanceWith);
-      cross(student.id, line);
+      addBubble(student.id, shown, "me", why || null, { lineId: lineId, mine: true, sent: true, force: true });
+      if (advanceWith) maybeAdvanceShared(student, advanceWith || outgoing);
+      cross(student.id, outgoing, lineId, shown);
+      noteActivity();
       renderAll();
     } else {
-      addBubble(student.id, line, "me", state.mode === "class" ? "You are not paired yet, so this stayed here." : NO_PARTNER);
+      addBubble(student.id, shown, "me", why || (state.mode === "class" ? "You are not paired yet, so this stayed here." : NO_PARTNER), { lineId: lineId, mine: true });
       if (advanceWith && state.mode !== "class") maybeAdvance(student, advanceWith);
       renderChrome(student);
     }
@@ -497,17 +603,238 @@
   function safetyHit(text) {
     return window.IgcSafety && window.IgcSafety.scan(text);
   }
+  function coachPrep() {
+    if (!window.IgcCoach) return null;
+    if (!state.coachPrep) state.coachPrep = IgcCoach.prepare(state.conversations || []);
+    return state.coachPrep;
+  }
+  function phrasePool() {
+    var pool = [];
+    var seen = Object.create(null);
+    function add(list) {
+      (list || []).forEach(function (p) {
+        var k = window.IgcCoach ? IgcCoach.fold(p) : p;
+        if (!k || seen[k]) return;
+        seen[k] = true;
+        pool.push(p);
+      });
+    }
+    var convo = state.convo;
+    if (convo) {
+      var steps = convo.steps || [];
+      var step = steps[state.step] || steps[0];
+      if (step) add(step.chips);
+      steps.forEach(function (s) { add(s.chips); });
+      add(convo.suggestions);
+    }
+    convosFor(state.level).forEach(function (c) {
+      (c.steps || []).forEach(function (s) { add(s.chips); });
+      add(c.suggestions);
+    });
+    return pool;
+  }
+  function partnerAskedQuestion() {
+    var last = state.lastIncoming || "";
+    if (window.IgcCoach && IgcCoach.isQuestion(last)) return true;
+    var q = state.cls && state.cls.question;
+    return !!(q && window.IgcCoach && IgcCoach.fold(last) === IgcCoach.fold(q));
+  }
+  function currentStarters() {
+    var list = (state.cls && state.cls.starters) || [];
+    return list.filter(Boolean);
+  }
+  function ideaList(asAnswers) {
+    if (asAnswers && partnerAskedQuestion() && currentStarters().length) return currentStarters().slice(0, 4);
+    if (String(state.level) === "3") {
+      var bank = (state.questions || []).filter(function (q) { return String(q.level) === "3"; });
+      if (asAnswers) {
+        var starters = [];
+        bank.forEach(function (q) { (q.starters || []).forEach(function (s) { starters.push(s); }); });
+        if (starters.length >= 2) return starters.slice(0, 4);
+      } else {
+        var qs = bank.map(function (q) { return q.q; }).filter(Boolean);
+        if (qs.length >= 2) return qs.slice(0, 4);
+      }
+    }
+    var pool = phrasePool();
+    var wantQ = !asAnswers;
+    var picked = pool.filter(function (p) { return (window.IgcCoach ? IgcCoach.isQuestion(p) : /\?\s*$/.test(p)) === wantQ; });
+    if (picked.length < 2) picked = pool;
+    return picked.slice(0, 4);
+  }
+  function starterStem(s) {
+    return String(s || "").replace(/[…\.]+$/g, "").trim();
+  }
+  function extraWords(text, stem) {
+    var rest = String(text || "").slice(stem.length);
+    var toks = window.IgcCoach ? IgcCoach.tokens(rest) : rest.trim().split(/\s+/);
+    return toks.filter(Boolean).length;
+  }
+  function starterBlock(text) {
+    var stems = currentStarters();
+    var built = (state.questions || []).filter(function (q) {
+      return state.cls && state.cls.question && window.IgcCoach && IgcCoach.fold(q.q) === IgcCoach.fold(state.cls.question);
+    })[0];
+    for (var i = 0; i < stems.length; i++) {
+      var stem = starterStem(stems[i]);
+      if (!stem) continue;
+      var folded = window.IgcCoach ? IgcCoach.fold(text) : text.toLowerCase();
+      var stemFold = window.IgcCoach ? IgcCoach.fold(stem) : stem.toLowerCase();
+      if (folded === stemFold || folded.indexOf(stemFold) === 0) {
+        if (extraWords(text, stem) < 2 && folded.indexOf(stemFold) === 0) {
+          return { stem: stems[i], example: (built && built.example) || (stem + " …") };
+        }
+        if (folded === stemFold) return { stem: stems[i], example: (built && built.example) || (stem + " …") };
+      }
+    }
+    return null;
+  }
+  function showIdeas(student, raw, lead, ideas) {
+    addBubble(student.id, raw, "me", lead, { force: true });
+    var help = student.root.querySelector("[data-role='help']");
+    help.hidden = false;
+    help.className = "help";
+    help.textContent = "";
+    help.appendChild(el("p", { class: "help-lead", text: lead }));
+    var row = el("div", { class: "idea-row" });
+    (ideas || []).slice(0, 4).forEach(function (phrase) {
+      var fill = /…/.test(phrase);
+      row.appendChild(el("button", {
+        type: "button",
+        class: "swap",
+        "data-fill": fill ? phrase : "",
+        "data-chip": fill ? "" : phrase,
+        text: phrase
+      }));
+    });
+    if (row.childNodes.length) help.appendChild(row);
+    scrollThread(student, true);
+  }
+  function hideIdle() {
+    ["A", "B"].forEach(function (id) {
+      var student = state.students[id];
+      if (!student) return;
+      var node = student.root.querySelector("[data-role='idle-nudge']");
+      if (node) node.hidden = true;
+    });
+  }
+  function noteActivity() {
+    state.lastSentAt = Date.now();
+    if (state.cls) state.cls.justRotated = false;
+    hideIdle();
+  }
+  function idleMs() {
+    var mount = document.getElementById("italian-guided-chat");
+    var n = mount && parseInt(mount.getAttribute("data-idle-ms") || "", 10);
+    return n > 0 ? n : 60000;
+  }
+  function idleEligible(student) {
+    if (chatFrozen()) return false;
+    if (state.cls && state.cls.phase === "goodbye") return false;
+    if (state.mode === "class") {
+      if (!classPaired()) return false;
+      if (isOpenConvo()) return true;
+      return hasTurn(student);
+    }
+    if (state.both) {
+      if (isOpenConvo()) return true;
+      return hasTurn(student);
+    }
+    return false;
+  }
+  function renderIdle() {
+    ["A", "B"].forEach(function (id) {
+      var student = state.students[id];
+      if (!student || student.root.hidden) return;
+      var node = student.root.querySelector("[data-role='idle-nudge']");
+      if (!node) return;
+      var show = idleEligible(student) && state.lastSentAt && (Date.now() - state.lastSentAt >= idleMs());
+      node.hidden = !show;
+      if (!show) return;
+      var answers = partnerAskedQuestion();
+      node.textContent = "";
+      node.appendChild(el("p", { class: "help-lead", text: answers ? "Your partner asked you a question. Answer in Italian." : "Ask your partner a question in Italian." }));
+      var row = el("div", { class: "idea-row" });
+      ideaList(answers).forEach(function (phrase) {
+        var fill = /…/.test(phrase);
+        row.appendChild(el("button", { type: "button", "data-fill": fill ? phrase : "", "data-chip": fill ? "" : phrase, text: phrase }));
+      });
+      node.appendChild(row);
+    });
+  }
+  function renderClock() {
+    var node = q("[data-role='rotate-clock']");
+    if (!node) return;
+    var c = state.cls;
+    if (state.mode !== "class" || !c || !c.pairId || c.autoRotate === false) { node.hidden = true; return; }
+    node.hidden = false;
+    node.className = "rotate-clock";
+    if (c.clockPaused || chatFrozen()) { node.className = "rotate-clock paused"; node.textContent = "Paused"; return; }
+    var left = Math.max(0, (c.clockEndsAt || 0) - Date.now());
+    var sec = Math.ceil(left / 1000);
+    var m = Math.floor(sec / 60);
+    var r = sec % 60;
+    var label = m + ":" + (r < 10 ? "0" : "") + r;
+    if (c.phase === "goodbye") {
+      node.className = "rotate-clock bye";
+      node.textContent = "Time to say goodbye! Say ciao in Italian " + label;
+    } else node.textContent = "Time left with this partner: " + label;
+  }
+  function applyClock(data) {
+    var c = state.cls;
+    if (!c || !data) return;
+    if (typeof data.autoRotate === "boolean") c.autoRotate = data.autoRotate;
+    if (data.phase) c.phase = data.phase;
+    if (typeof data.paused === "boolean") c.clockPaused = data.paused;
+    if (typeof data.endsAt === "number") c.clockEndsAt = data.endsAt;
+    if (data.paused) c.clockEndsAt = 0;
+    renderClock();
+    if (c.phase === "goodbye" && !c._byeShown) {
+      c._byeShown = true;
+      setClassStatus("Time to say goodbye in Italian.");
+      renderAll();
+    }
+    if (c.phase !== "goodbye") c._byeShown = false;
+  }
+  function answeredToday(line) {
+    var q = state.cls && state.cls.question;
+    if (!q) return false;
+    var stems = currentStarters().map(starterStem);
+    var folded = window.IgcCoach ? IgcCoach.fold(line) : line;
+    return stems.some(function (stem) { return stem && folded.indexOf(window.IgcCoach.fold(stem)) === 0; });
+  }
   function attempt(student, raw) {
     var text = String(raw || "").trim();
     if (!text) return;
     if (chatFrozen()) { setClassStatus("Teacher paused chat."); return; }
+    var blockedStarter = starterBlock(text);
+    if (blockedStarter) {
+      showIdeas(student, text, "Add on! Finish the sentence in your own words, e.g. " + blockedStarter.example, [blockedStarter.stem]);
+      return;
+    }
+    var swap = matchSwap(text);
+    if (swap) {
+      showIdeas(student, text, "Write it in Italian.", [swap.it].concat(ideaList(false)).slice(0, 4));
+      return;
+    }
+    var prep = coachPrep();
+    if (prep && window.IgcCoach) {
+      var judged = IgcCoach.judge(text, prep);
+      if (judged.action === "swear") { holdFlag(student, text, { category: judged.category || "swear" }); return; }
+      if (judged.action === "english" || judged.action === "emoji" || judged.action === "fix") {
+        var answers = judged.action === "english" ? false : partnerAskedQuestion();
+        if (judged.action === "english") answers = partnerAskedQuestion();
+        showIdeas(student, text, judged.why || "Write it in Italian.", ideaList(answers));
+        return;
+      }
+      var outgoing = judged.send || text;
+      if (judged.changed && judged.why) deliverCorrected(student, text, outgoing, outgoing, judged.why);
+      else deliverCorrected(student, outgoing, outgoing, outgoing, "");
+      return;
+    }
     var hit = safetyHit(text);
     if (hit) { holdFlag(student, text, hit); return; }
-    var canon = canonical(text);
-    if (canon) { deliver(student, canon, canon); return; }
-    var swap = matchSwap(text);
-    if (swap || isEnglish(text)) { showEnglishHelp(student, text, swap); return; }
-    if (isGibberish(text)) { showBlocked(student, text); return; }
+    if (isEnglish(text)) { showEnglishHelp(student, text, matchSwap(text)); return; }
     deliver(student, text, null);
   }
 
@@ -577,11 +904,11 @@
   function studentId() {
     var key = "italianGuidedStudentId";
     var id = null;
-    try { id = sessionStorage.getItem(key); } catch (e) {}
-    if (!id) {
-      id = Math.random().toString(36).slice(2, 10);
-      try { sessionStorage.setItem(key, id); } catch (e) {}
-    }
+    try { id = localStorage.getItem(key); } catch (e) {}
+    if (!id) { try { id = sessionStorage.getItem(key); } catch (e2) {} }
+    if (!id) id = Math.random().toString(36).slice(2, 10);
+    try { localStorage.setItem(key, id); } catch (e3) {}
+    try { sessionStorage.setItem(key, id); } catch (e4) {}
     return id;
   }
   function readJoin() {
@@ -619,8 +946,15 @@
     var c = state.cls;
     if (!c || !c.pairId || !c.partner) return;
     if (c.classFrozen || c.pairFrozen) { setClassStatus("Teacher paused chat."); return; }
-    var extra = isOpenConvo() ? "Talk freely in Italian." : (c.role === "first" ? "You start." : c.partner + " starts.");
-    setClassStatus("You are paired with " + c.partner + ". " + extra);
+    if (c.justRotated) {
+      var rotated = (c.partners || [c.partner]).join(" and ");
+      setClassStatus("New partner: " + rotated + ". Say hello in Italian!");
+      return;
+    }
+    var names = c.partners || (c.partner ? [c.partner] : ["your partner"]);
+    var who = names.join(" and ");
+    var extra = isOpenConvo() ? "Talk freely in Italian." : (c.roleIndex === 0 || c.role === "first" ? "You start." : names[0] + " starts.");
+    setClassStatus("You are paired with " + who + ". " + extra);
   }
   function classSend(msg) {
     var c = state.cls;
@@ -702,11 +1036,24 @@
     }
     if (data.type === "paired") {
       c.pairId = String(data.pairId);
-      c.partner = String((data.partner && data.partner.name) || "Partner");
-      c.role = data.role === "first" ? "first" : "second";
+      var names = (data.partners || []).map(function (p) { return String((p && p.name) || p || ""); }).filter(Boolean);
+      if (!names.length && data.partner) names = [String(data.partner.name || data.partner)];
+      c.partners = names;
+      c.partner = names.join(" and ") || "Partner";
+      c.groupSize = names.length + 1;
+      c.roleIndex = typeof data.roleIndex === "number" ? data.roleIndex : (data.role === "second" ? 1 : data.role === "third" ? 2 : 0);
+      c.role = c.roleIndex === 0 ? "first" : "second";
       c.locked = !!data.locked;
       if (typeof data.classFrozen === "boolean") c.classFrozen = data.classFrozen;
       if (typeof data.pairFrozen === "boolean") c.pairFrozen = data.pairFrozen;
+      if (typeof data.question === "string") c.question = data.question;
+      if (data.starters) c.starters = data.starters;
+      if (data.clock) applyClock(data.clock);
+      state.lastSentAt = Date.now();
+      if (data.fresh) {
+        c.justRotated = true;
+        ["A", "B"].forEach(function (id) { if (state.students[id]) clearThread(state.students[id]); });
+      }
       var nextLevel = data.level && convosFor(data.level).length ? String(data.level) : state.level;
       if (String(state.level) !== String(nextLevel)) setLevel(nextLevel, true);
       else if (data.convoId && state.convo && data.convoId !== state.convo.id) setConversation(String(data.convoId), true);
@@ -714,7 +1061,7 @@
       syncLevelUi();
       fillConversationSelect();
       if (c.classFrozen || c.pairFrozen) setClassStatus("Teacher paused chat.");
-      else refreshPairedStatus();
+      else if (!data.fresh) refreshPairedStatus();
       renderAll();
       return;
     }
@@ -732,13 +1079,49 @@
     if (data.type === "line") {
       if (c.classFrozen || c.pairFrozen) return;
       if (!c.pairId || String(data.pairId) !== c.pairId) return;
-      var clean = canonical(data.text);
-      var line = clean || String(data.text || "").trim();
-      if (!line || isEnglish(line) || isGibberish(line) || safetyHit(line)) return;
-      addBubble("A", line, "them", null);
+      var line = String(data.text || "").trim();
+      if (!line || safetyHit(line)) return;
+      var prep = coachPrep();
+      if (prep && window.IgcCoach) {
+        var judged = IgcCoach.judge(line, prep);
+        if (judged.action === "swear" || judged.action === "english" || judged.action === "emoji") return;
+      }
+      state.lastIncoming = line;
+      addBubble("A", line, "them", null, { lineId: data.lineId || "", from: data.from || "" });
       var total = (state.convo.steps || []).length;
       if (typeof data.step === "number" && data.step % 1 === 0 && data.step >= 0 && data.step <= total) state.step = data.step;
       renderAll();
+      renderIdle();
+      return;
+    }
+    if (data.type === "delete_line" || data.type === "remove_line") {
+      var gone = document.querySelector("[data-line-id='" + String(data.lineId || "").replace(/'/g, "") + "']");
+      if (gone) {
+        var holder = gone.querySelector(".line");
+        if (holder) holder.textContent = data.type === "remove_line" ? "Removed by teacher" : "Message deleted";
+        var btn = gone.querySelector("[data-delete-line]");
+        if (btn) btn.remove();
+        gone.setAttribute("data-text", holder ? holder.textContent : "");
+      }
+      return;
+    }
+    if (data.type === "rotate_clock") { applyClock(data); return; }
+    if (data.type === "question") {
+      c.question = String(data.text || "");
+      c.starters = data.starters || [];
+      renderToday();
+      return;
+    }
+    if (data.type === "gloss_answer" || data.type === "gloss_add") {
+      state.glossAdds = state.glossAdds || [];
+      state.glossAdds.push({ en: [String(data.en || "")], it: [String(data.it || "")] });
+      showGlossAnswer(String(data.en || ""), String(data.it || ""));
+      return;
+    }
+    if (data.type === "removed") {
+      forgetJoin();
+      leaveClass(true);
+      setClassStatus("Your teacher removed you from this class. Ask your teacher if this is a mistake.");
       return;
     }
     if (data.type === "level") {
@@ -783,14 +1166,6 @@
     if (state.cls !== c || c.cancelled || c.stopped || c.retrying) return;
     if (c.joined && c.conn && c.conn.open) return;
     if (reason) c.lastError = reason;
-    if (reason === "unavailable-id") {
-      c.idStrikes = (c.idStrikes || 0) + 1;
-      if (c.idStrikes >= 2) {
-        c.sid = Math.random().toString(36).slice(2, 10);
-        try { sessionStorage.setItem("italianGuidedStudentId", c.sid); } catch (e) {}
-        c.idStrikes = 0;
-      }
-    }
     c.retrying = true;
     c.joined = false;
     clearJoinPulse(c);
@@ -804,9 +1179,12 @@
     try { if (oldPeer) oldPeer.destroy(); } catch (e) {}
     if (c.tries >= 4) { c.retrying = false; failFinal(c); return; }
     var wait = c.lastError === "unavailable-id" ? 3000 : 1200;
-    setClassStatus(c.wasConnected
-      ? "Reconnecting to class " + c.code + " (try " + (c.tries + 1) + " of 4). Stay on this page."
-      : "Still opening the chat line to class " + c.code + " (try " + (c.tries + 1) + " of 4). If this keeps going, tap Reconnect.");
+    var waited = c.startedAt && (Date.now() - c.startedAt > 20000);
+    setClassStatus(waited
+      ? "The chat line is still not open. Tap Reconnect. If that does not work, close this tab and open the class link again."
+      : (c.wasConnected
+        ? "Reconnecting to class " + c.code + " (try " + (c.tries + 1) + " of 4). Stay on this page."
+        : "Still opening the chat line to class " + c.code + " (try " + (c.tries + 1) + " of 4). If this keeps going, tap Reconnect."));
     syncReconnect();
     c.timer = setTimeout(function () {
       if (state.cls !== c || c.cancelled || c.stopped || c.joined) return;
@@ -842,7 +1220,7 @@
         conn = peerObj.connect(teacherPeerId(c.code), {
           reliable: true,
           serialization: "json",
-          metadata: { studentId: c.sid, name: c.name }
+          metadata: { studentId: c.sid, browserId: c.sid, name: c.name }
         });
       } catch (e) { scheduleRetry(c, "network"); return; }
       c.conn = conn;
@@ -892,7 +1270,8 @@
     var c = state.cls = {
       code: code, name: name, sid: sid, peer: null, conn: null, joined: false, pairId: null, partner: null,
       role: null, locked: false, classFrozen: false, pairFrozen: false, timer: null, watch: null, joinPulse: null, cancelled: false, stopped: false, retrying: false,
-      tries: 1, wasConnected: false, lastError: "", idStrikes: 0, brokerRetries: 0
+      tries: 1, wasConnected: false, lastError: "", brokerRetries: 0, startedAt: Date.now(),
+      autoRotate: true, phase: "chat", clockEndsAt: 0, clockPaused: false, question: "", starters: []
     };
     q("[data-role='join-class']").hidden = true;
     q("[data-role='leave-class']").hidden = false;
@@ -930,8 +1309,11 @@
         )
       ),
       el("p", { class: "note", "data-role": "note", text: NOTE }),
+      el("p", { class: "rotate-clock", "data-role": "rotate-clock" }),
+      el("p", { class: "today-q", "data-role": "today-q" }),
       thread,
       el("div", { class: "dock" },
+        el("div", { class: "idle-nudge", "data-role": "idle-nudge" }),
         el("p", { class: "prompt", "data-role": "prompt" }),
         el("div", { class: "chips", "data-role": "chips" }),
         el("div", { class: "help", "data-role": "help", "aria-live": "polite" }),
@@ -942,11 +1324,43 @@
       )
     );
     root.querySelector("[data-role='help']").hidden = true;
+    root.querySelector("[data-role='rotate-clock']").hidden = true;
+    root.querySelector("[data-role='today-q']").hidden = true;
+    root.querySelector("[data-role='idle-nudge']").hidden = true;
     var student = { id: id, step: 0, root: root };
     clearThread(student);
     root.addEventListener("click", function (event) {
+      var del = event.target.closest("[data-delete-line]");
+      if (del && root.contains(del)) {
+        if (!window.confirm("Delete this message?")) return;
+        var id = del.getAttribute("data-delete-line");
+        var bubble = del.closest(".bubble");
+        var holder = bubble && bubble.querySelector(".line");
+        if (holder) holder.textContent = "Message deleted";
+        del.remove();
+        if (state.mode === "class" && state.cls && state.cls.pairId) {
+          classSend({ type: "delete_line", pairId: state.cls.pairId, lineId: id });
+        } else if (state.both) {
+          var other = student.id === "A" ? "B" : "A";
+          var twin = state.students[other] && state.students[other].root.querySelector("[data-line-id='" + id + "']");
+          if (twin) {
+            var line = twin.querySelector(".line");
+            if (line) line.textContent = "Message deleted";
+            var btn = twin.querySelector("[data-delete-line]");
+            if (btn) btn.remove();
+          }
+        }
+        return;
+      }
+      var fill = event.target.closest("[data-fill]");
+      if (fill && root.contains(fill) && fill.getAttribute("data-fill")) {
+        var input = root.querySelector("[data-role='composer']");
+        input.value = fill.getAttribute("data-fill").replace(/…\s*$/, " ");
+        input.focus();
+        return;
+      }
       var btn = event.target.closest("button[data-chip]");
-      if (!btn || !root.contains(btn)) return;
+      if (!btn || !root.contains(btn) || !btn.getAttribute("data-chip")) return;
       attempt(student, btn.getAttribute("data-chip"));
     });
     root.querySelector("[data-role='form']").addEventListener("submit", function (event) {
@@ -1018,7 +1432,29 @@
     );
     desk.appendChild(state.students.A.root);
     desk.appendChild(state.students.B.root);
+    var gloss = el("aside", { class: "gloss", "data-role": "gloss", "aria-label": "Come si dice" },
+      el("h2", { text: "Come si dice…?" }),
+      el("p", { text: "Type a word or phrase in English to see how to say it in Italian." }),
+      el("input", { "data-role": "gloss-q", type: "text", placeholder: "how old are you", "aria-label": "English word or phrase" }),
+      el("div", { "data-role": "gloss-out" }),
+      el("button", { type: "button", "data-role": "gloss-toggle", text: "Hide Come si dice…?" })
+    );
+    gloss.querySelector("[data-role='gloss-q']").addEventListener("input", function (e) { renderGloss(e.target.value); });
+    gloss.addEventListener("click", function (e) {
+      var b = e.target.closest("[data-gloss]");
+      if (!b) return;
+      var input = q("[data-role='composer']");
+      if (!input) return;
+      input.value = String(b.getAttribute("data-gloss") || "").replace(/…\s*$/, " ");
+      input.focus();
+    });
+    gloss.querySelector("[data-role='gloss-toggle']").addEventListener("click", function () {
+      var open = gloss.getAttribute("data-open") !== "no";
+      gloss.setAttribute("data-open", open ? "no" : "yes");
+      gloss.hidden = open;
+    });
     desk.appendChild(tips);
+    desk.appendChild(gloss);
     stage.appendChild(desk);
     mount.appendChild(stage);
 
@@ -1052,8 +1488,57 @@
         } else q("[data-role='join-name']").focus();
       }
     }
+    restoreThread();
   }
 
+  function foldGloss(s) {
+    return String(s || "").toLowerCase().replace(/['’]/g, "").replace(/[^a-z\s]/g, " ").replace(/\b(a|an|the)\b/g, " ").replace(/\s+/g, " ").trim();
+  }
+  function renderGloss(raw) {
+    var out = q("[data-role='gloss-out']");
+    if (!out) return;
+    out.textContent = "";
+    var qtext = String(raw || "").trim();
+    if (!qtext) return;
+    var hit = safetyHit(qtext);
+    if (hit) {
+      if (state.students.A) holdFlag(state.students.A, qtext, hit);
+      out.appendChild(el("p", { text: "That was not looked up. Please keep this school-appropriate." }));
+      return;
+    }
+    var key = foldGloss(qtext);
+    var hits = [];
+    (state.glossary || []).concat(state.glossAdds || []).forEach(function (entry) {
+      var ens = entry.en || [];
+      for (var i = 0; i < ens.length; i++) {
+        var ek = foldGloss(ens[i]);
+        if (ek === key || (key && ek.indexOf(key) >= 0) || (ek && key.indexOf(ek) >= 0)) { hits.push(entry); break; }
+      }
+    });
+    if (!hits.length) {
+      out.appendChild(el("p", { text: "Not in the list yet. Your teacher can answer." }));
+      var ask = el("button", { type: "button", text: "Ask teacher" });
+      ask.addEventListener("click", function () {
+        if (state.mode === "class" && classSend({ type: "ask", text: qtext.slice(0, 200), at: Date.now() })) {
+          out.appendChild(el("p", { text: "Sent to your teacher. Your partner cannot see it." }));
+        } else out.appendChild(el("p", { text: "Join your teacher's class to ask them." }));
+      });
+      out.appendChild(ask);
+      return;
+    }
+    hits.slice(0, 3).forEach(function (entry) {
+      (entry.it || []).forEach(function (it) {
+        out.appendChild(el("button", { type: "button", class: "gloss-hit", "data-gloss": it, text: it + " — " + (entry.en && entry.en[0] || "") }));
+      });
+    });
+  }
+  function showGlossAnswer(en, it) {
+    var out = q("[data-role='gloss-out']");
+    if (!out) return;
+    out.appendChild(el("p", { text: "Your teacher answered \"" + en + "\": " + it }));
+    var b = el("button", { type: "button", class: "gloss-hit", "data-gloss": it, text: "Use " + it });
+    out.appendChild(b);
+  }
   function levelFromSearch() {
     var params;
     try { params = new URLSearchParams(location.search); } catch (e) { return ""; }
@@ -1074,18 +1559,85 @@
       document.documentElement.classList.add("guided-fill");
       document.body.classList.add("guided-fill");
     }
-    fetch(new URL("conversations.json", base).href, { cache: "no-store" })
-      .then(function (res) { if (!res.ok) throw new Error("conversations"); return res.json(); })
-      .then(function (data) { build(mount, data); })
+    function grab(name) {
+      return fetch(new URL(name, base).href, { cache: "no-store" }).then(function (res) {
+        if (!res.ok) throw new Error(name);
+        return res.json();
+      });
+    }
+    grab("conversations.json")
+      .then(function (data) {
+        return Promise.all([
+          Promise.resolve(data),
+          grab("glossary.json").catch(function () { return { entries: [] }; }),
+          grab("questions.json").catch(function () { return { questions: [] }; })
+        ]);
+      })
+      .then(function (all) {
+        state.glossary = (all[1] && all[1].entries) || [];
+        state.questions = (all[2] && all[2].questions) || [];
+        build(mount, all[0]);
+        state.lastSentAt = Date.now();
+        setInterval(function () { renderIdle(); renderClock(); }, 1000);
+      })
       .catch(function () { mount.textContent = "The conversation list did not load."; });
   }
 
   function loadScript(url, next) {
+    var id = document.documentElement.getAttribute("data-build") || "";
+    if (id && url.indexOf("v=") < 0) url += (url.indexOf("?") >= 0 ? "&" : "?") + "v=" + encodeURIComponent(id);
     var tag = document.createElement("script");
     tag.src = url;
     tag.onload = next;
     tag.onerror = next;
     document.head.appendChild(tag);
+  }
+  var pendingBuild = "";
+  var typedAt = 0;
+  document.addEventListener("input", function (e) {
+    var role = e.target && e.target.getAttribute && e.target.getAttribute("data-role");
+    if (role === "composer" || role === "gloss-q") typedAt = Date.now();
+  }, true);
+  function composerBusy() {
+    var nodes = document.querySelectorAll("[data-role='composer'], [data-role='gloss-q']");
+    var has = false;
+    for (var i = 0; i < nodes.length; i++) if (String(nodes[i].value || "").trim()) has = true;
+    if (!has) return false;
+    if (!typedAt) typedAt = Date.now();
+    return Date.now() - typedAt < 30000;
+  }
+  function maybeUpdate() {
+    if (!pendingBuild) return;
+    if (composerBusy()) { setTimeout(maybeUpdate, 5000); return; }
+    var status = document.querySelector("[data-role='class-status']");
+    if (status) status.textContent = "Updating to the newest version…";
+    var mount = document.getElementById("italian-guided-chat");
+    if (mount && !mount.querySelector("[data-role='toast']")) {
+      var toast = document.createElement("p");
+      toast.className = "toast-line";
+      toast.setAttribute("data-role", "toast");
+      toast.textContent = "Updating to the newest version…";
+      mount.insertBefore(toast, mount.firstChild);
+    }
+    var params = new URLSearchParams(location.search);
+    params.set("v", pendingBuild);
+    setTimeout(function () { location.replace(location.pathname + "?" + params.toString()); }, 1200);
+  }
+  function watchVersion() {
+    function look() {
+      fetch(new URL("version.json?t=" + Date.now(), base).href, { cache: "no-store" })
+        .then(function (r) { return r.json(); })
+        .then(function (v) {
+          var params = new URLSearchParams(location.search);
+          var loaded = params.get("v") || document.documentElement.getAttribute("data-build") || "";
+          if (!v || !v.id || !loaded || v.id === loaded) return;
+          pendingBuild = v.id;
+          maybeUpdate();
+        }).catch(function () {});
+    }
+    look();
+    setInterval(look, 60000);
+    window.addEventListener("focus", look);
   }
   function boot() {
     injectCss();
@@ -1100,8 +1652,13 @@
       if (window.IgcSafety) loadPeer();
       else loadScript(new URL("safety.js", base).href, loadPeer);
     };
-    if (window.IgcNet) loadSafety();
-    else loadScript(new URL("net.js", base).href, loadSafety);
+    var loadCoach = function () {
+      if (window.IgcCoach) loadSafety();
+      else loadScript(new URL("coach.js", base).href, loadSafety);
+    };
+    if (window.IgcNet) loadCoach();
+    else loadScript(new URL("net.js", base).href, loadCoach);
+    watchVersion();
   }
 
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", boot);
