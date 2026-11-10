@@ -38,7 +38,9 @@
   .pill.off { background:rgba(255,69,58,.15); color:var(--red); }
   .help { background:#3a1d1b; border:1px solid #5c2a27; color:#ffd7d4; border-radius:14px; padding:10px 12px; font-size:14px; margin-top:10px; }
   .roster { display:flex; flex-wrap:wrap; gap:8px; }
-  .stu { border-radius:999px; padding:6px 12px 6px 6px; min-height:40px; }
+  .stu { border-radius:999px; padding:4px 6px 4px 4px; min-height:40px; display:inline-flex; align-items:center; gap:4px; }
+  .stu > button { border:0; background:transparent; min-height:36px; padding:4px 6px; }
+  .stu-x { min-height:32px; padding:4px 8px; font-size:12px; }
   .stu .av { width:28px; height:28px; border-radius:50%; display:grid; place-items:center; background:linear-gradient(145deg,#64d2ff,#007AFF); font-weight:700; font-size:13px; color:#fff; }
   .stu.paired .av { background:linear-gradient(145deg,#30d158,#64d2ff); }
   .stu.offline { opacity:.5; }
@@ -109,6 +111,13 @@
         <button type="button" class="primary" id="btnCreate">Create session</button>
         <button type="button" class="danger" id="btnEnd" disabled>End session</button>
       </div>
+      <div class="row" style="margin-top:10px">
+        <label class="check"><input type="checkbox" id="autoRotate" checked> Auto-rotate partners</label>
+        <label class="field">Minutes<input id="rotateMinutes" type="number" min="0.5" step="0.5" value="5"></label>
+        <button type="button" id="btnRotate">Rotate now</button>
+        <span class="muted" id="rotateClock">Time left: —</span>
+      </div>
+      <label class="check"><input type="checkbox" id="blockRejoin"> Block removed students from rejoining</label>
       <div class="row" id="reopenRow" style="margin-top:10px" hidden>
         <label class="field">PIN for last session<input id="reopenPin" maxlength="8" inputmode="numeric"></label>
         <button type="button" id="btnReopen">Reopen last session</button>
@@ -136,6 +145,30 @@
   </div>
 
   <section class="card">
+    <h2>Today's question</h2>
+    <p class="muted" id="questionHint">Suggestions for this level are below. If you write your own question and leave starters blank, students will not get frames.</p>
+    <div class="row">
+      <label class="field">Question<input id="todayQuestion" maxlength="160" placeholder="Cosa facevi da bambino?"></label>
+      <label class="field">For<select id="questionScope"><option value="class">Whole class</option></select></label>
+    </div>
+    <label class="field">Starters, one per line<textarea id="todayStarters" rows="3" maxlength="500" placeholder="Da bambino giocavo…"></textarea></label>
+    <div class="row" style="margin-top:8px">
+      <button type="button" id="btnQuestion">Set question</button>
+      <button type="button" id="btnClearQuestion">Clear</button>
+    </div>
+    <div id="questionIdeas"></div>
+  </section>
+  <section class="card">
+    <h2>Come si dice requests</h2>
+    <div id="asks"><div class="empty">No requests yet.</div></div>
+  </section>
+  <section class="card">
+    <h2>Past classes</h2>
+    <p class="muted">Deleting a past class removes its saved roster, transcripts, and flags from this browser. Deleting the class that is running ends it for students.</p>
+    <button type="button" id="btnDeletePast">Delete all past sessions</button>
+    <div id="pastSessions"></div>
+  </section>
+  <section class="card">
     <h2>3. Live pairs · sent lines and flags</h2>
     <p class="muted" style="margin:-4px 0 12px">Only clean Italian that reached the partner appears in the transcript. Flagged messages (swears, put-downs, or harm) stay in the flags list and are not sent to the partner.</p>
     <div class="pairs" id="pairs"><div class="empty">No pairs yet</div></div>
@@ -143,9 +176,49 @@
 </main>
 <div class="toast" id="toast" role="status"></div>
 
-<script src="net.js"></script>
-<script src="safety.js"></script>
-<script src="vendor/peerjs.min.js"></script>
+<script src="net.js?v=2026-11-10b"></script>
+<script src="safety.js?v=2026-11-10b"></script>
+<script src="coach.js?v=2026-11-10b"></script>
+<script src="vendor/peerjs.min.js?v=2026-11-10b"></script>
+<script>
+(function () {
+  var BAKED = "2026-11-10b";
+  document.documentElement.setAttribute("data-build", BAKED);
+  var pending = "";
+  var typedAt = 0;
+  document.addEventListener("input", function (e) {
+    var tag = e.target && e.target.tagName;
+    if (tag === "INPUT" || tag === "TEXTAREA") typedAt = Date.now();
+  }, true);
+  function busy() {
+    var el = document.activeElement;
+    if (!el || (el.tagName !== "INPUT" && el.tagName !== "TEXTAREA")) return false;
+    if (!String(el.value || "").trim()) return false;
+    if (!typedAt) return false;
+    return Date.now() - typedAt < 30000;
+  }
+  function go() {
+    if (!pending) return;
+    if (busy()) { setTimeout(go, 5000); return; }
+    var toast = document.getElementById("toast");
+    if (toast) { toast.textContent = "Updating to the newest version…"; toast.classList.add("show"); }
+    var params = new URLSearchParams(location.search);
+    params.set("v", pending);
+    setTimeout(function () { location.replace(location.pathname + "?" + params.toString()); }, 1200);
+  }
+  function look() {
+    fetch("version.json?t=" + Date.now(), { cache: "no-store" }).then(function (r) { return r.json(); }).then(function (v) {
+      var loaded = new URLSearchParams(location.search).get("v") || BAKED;
+      if (!v || !v.id || v.id === loaded) return;
+      pending = v.id;
+      go();
+    }).catch(function () {});
+  }
+  look();
+  setInterval(look, 60000);
+  window.addEventListener("focus", look);
+})();
+</script>
 <script>
 (function () {
   'use strict';
@@ -158,9 +231,13 @@
   var picked = [];
   var oldPeer = null;
   var convos = [];
+  var questionBank = [];
+  var PAST_KEY = 'italianGuidedTeacher_past_v1';
 
   fetch('conversations.json', { cache: 'no-store' }).then(function (r) { return r.json(); })
     .then(function (d) { convos = (d && d.conversations) || []; renderPairs(); }).catch(function () {});
+  fetch('questions.json', { cache: 'no-store' }).then(function (r) { return r.json(); })
+    .then(function (d) { questionBank = (d && d.questions) || []; renderQuestionIdeas(); }).catch(function () {});
 
   function toast(t) { var e = $('toast'); e.textContent = t; e.classList.add('show'); clearTimeout(toast.t); toast.t = setTimeout(function () { e.classList.remove('show'); }, 2200); }
   function makeCode() { var c = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789', o = ''; for (var i = 0; i < 6; i++) o += c.charAt(Math.floor(Math.random() * c.length)); return o; }
@@ -223,12 +300,60 @@
     if ($('pairs')) renderPairs();
   }
 
+  function membersOf(pair) {
+    if (!pair) return [];
+    if (pair.members && pair.members.length) return pair.members.filter(Boolean);
+    var m = [];
+    if (pair.a) m.push(pair.a);
+    if (pair.b && m.indexOf(pair.b) < 0) m.push(pair.b);
+    if (pair.c && m.indexOf(pair.c) < 0) m.push(pair.c);
+    return m;
+  }
+  function syncMembers(pair) {
+    var m = membersOf(pair);
+    pair.members = m.slice();
+    pair.a = m[0] || null;
+    pair.b = m[1] || null;
+    pair.c = m[2] || null;
+    return m;
+  }
+  function questionFor(pair) {
+    if (pair && pair.question) return { text: pair.question, starters: pair.starters || [] };
+    return { text: (session && session.question) || '', starters: (session && session.starters) || [] };
+  }
+  function clockFor(sid) {
+    if (!session) return { type: 'rotate_clock', autoRotate: false, paused: false, phase: 'chat', endsAt: 0 };
+    var st = session.students[sid];
+    var pair = st && st.pairId && session.pairs[st.pairId];
+    var paused = !!(session.frozen || (pair && pair.frozen));
+    var phase = session.phase || 'chat';
+    return {
+      type: 'rotate_clock',
+      autoRotate: session.autoRotate !== false,
+      phase: phase,
+      paused: paused,
+      endsAt: paused ? 0 : (phase === 'goodbye' ? (session.goodbyeEndsAt || 0) : (session.rotateEndsAt || 0))
+    };
+  }
+  function broadcastClock() {
+    if (!session) return;
+    Object.keys(session.students).forEach(function (sid) { send(sid, clockFor(sid)); });
+    renderTeacherClock();
+  }
   function pairMsg(pair, sid) {
-    var other = pair.a === sid ? pair.b : pair.a;
-    return { type: 'paired', pairId: pair.id, partner: { name: (session.students[other] || {}).name || 'Partner' },
-      role: pair.a === sid ? 'first' : 'second', level: pair.level || session.level, locked: session.locked,
+    var members = syncMembers(pair);
+    var idx = members.indexOf(sid);
+    if (idx < 0) idx = 0;
+    var partners = members.filter(function (id) { return id !== sid; }).map(function (id) {
+      return { name: (session.students[id] || {}).name || 'Partner' };
+    });
+    var q = questionFor(pair);
+    return { type: 'paired', pairId: pair.id, partners: partners, partner: partners[0] || { name: 'Partner' },
+      role: idx === 0 ? 'first' : (idx === 1 ? 'second' : 'third'), roleIndex: idx,
+      level: pair.level || session.level, locked: session.locked,
       convoId: pair.convoId || null, step: pair.step || 0,
-      classFrozen: !!session.frozen, pairFrozen: !!pair.frozen };
+      classFrozen: !!session.frozen, pairFrozen: !!pair.frozen,
+      question: q.text, starters: q.starters, clock: clockFor(sid), fresh: !!pair.fresh };
   }
   function freezeMsg(sid) {
     var st = session.students[sid];
@@ -253,8 +378,15 @@
   function toggleClassFreeze() {
     if (!session) return;
     session.frozen = !session.frozen;
+    if (session.frozen) {
+      session.rotateRemaining = Math.max(0, (session.rotateEndsAt || Date.now()) - Date.now());
+      session.rotateEndsAt = null;
+    } else {
+      session.rotateEndsAt = Date.now() + (session.rotateRemaining || (session.rotateMinutes || 5) * 60000);
+    }
     save();
     pushFreezeAll();
+    broadcastClock();
     syncFreezeButton();
     renderPairs();
     toast(session.frozen ? 'Chat paused for the class' : 'Chat resumed for the class');
@@ -271,24 +403,61 @@
     var B = (session.students[pair.b] || {}).name || 'Student';
     toast((pair.frozen ? 'Chat paused for ' : 'Chat resumed for ') + A + ' and ' + B);
   }
-  function makePair(a, b) {
-    var id = 'p' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
-    var pair = { id: id, a: a, b: b, level: session.level, convoId: null, step: 0, transcript: [], frozen: false };
-    session.pairs[id] = pair; session.pairOrder.push(id);
-    session.students[a].pairId = id; session.students[b].pairId = id;
-    send(a, pairMsg(pair, a)); send(b, pairMsg(pair, b));
-    pushFreeze(a); pushFreeze(b);
+  function rememberHistory(pair) {
+    session.history = session.history || [];
+    var ids = membersOf(pair).slice().sort();
+    if (ids.length < 2) return;
+    session.history.push({ ids: ids, at: Date.now() });
+  }
+  function workedTogether(a, b) {
+    return (session.history || []).some(function (h) { return h.ids.indexOf(a) >= 0 && h.ids.indexOf(b) >= 0; });
+  }
+  function lastTogether(a, b) {
+    var t = 0;
+    (session.history || []).forEach(function (h) {
+      if (h.ids.indexOf(a) >= 0 && h.ids.indexOf(b) >= 0) t = Math.max(t, h.at || 0);
+    });
+    return t;
+  }
+  function makeGroup(ids, fresh) {
+    ids = (ids || []).filter(function (sid, i) { return sid && ids.indexOf(sid) === i && session.students[sid]; }).slice(0, 3);
+    if (ids.length < 2) return null;
+    var id = 'p' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+    var pair = { id: id, members: ids.slice(), level: session.level, convoId: null, step: 0, transcript: [], frozen: false, question: '', starters: [], startedAt: Date.now(), goodbyes: {}, fresh: !!fresh };
+    syncMembers(pair);
+    session.pairs[id] = pair;
+    session.pairOrder.push(id);
+    ids.forEach(function (sid) { session.students[sid].pairId = id; session.students[sid].linking = false; session.students[sid].online = !!session.students[sid].online; });
+    rememberHistory(pair);
+    ids.forEach(function (sid) { send(sid, pairMsg(pair, sid)); pushFreeze(sid); });
+    pair.fresh = false;
     save();
     return pair;
   }
+  function makePair(a, b) { return makeGroup([a, b], false); }
   function unpair(id) {
     var pair = session.pairs[id]; if (!pair) return;
-    var sides = [pair.a, pair.b];
+    var sides = membersOf(pair);
     sides.forEach(function (sid) { if (session.students[sid]) session.students[sid].pairId = null; send(sid, { type: 'unpaired' }); });
     delete session.pairs[id];
     session.pairOrder = session.pairOrder.filter(function (x) { return x !== id; });
     sides.forEach(pushFreeze);
     save(); renderRoster(); renderPairs();
+  }
+  function addToGroup(pairId, sid) {
+    var pair = session.pairs[pairId];
+    var s = session.students[sid];
+    if (!pair || !s || s.pairId || !s.online) { toast('Choose an unpaired student who is connected'); return; }
+    var m = membersOf(pair);
+    if (m.length >= 3) { toast('A group can have only 3 students'); return; }
+    m.push(sid);
+    pair.members = m;
+    syncMembers(pair);
+    s.pairId = pairId;
+    rememberHistory(pair);
+    m.forEach(function (id) { send(id, pairMsg(pair, id)); });
+    save(); renderRoster(); renderPairs();
+    toast(s.name + ' joined the group');
   }
   function unpairedOnline() {
     return Object.keys(session.students).filter(function (sid) { var s = session.students[sid]; return s.online && !s.pairId; })
@@ -297,10 +466,18 @@
   function autoPair() {
     if (!session) return;
     var list = unpairedOnline(), n = 0;
-    for (var i = 0; i + 1 < list.length; i += 2) { makePair(list[i], list[i + 1]); n++; }
+    if (list.length < 2) { toast('Need two unpaired students'); return; }
+    if (list.length % 2 === 1) {
+      var trio = list.slice(-3);
+      var rest = list.slice(0, list.length - 3);
+      for (var i = 0; i + 1 < rest.length; i += 2) { makeGroup([rest[i], rest[i + 1]], false); n++; }
+      if (trio.length === 3) { makeGroup(trio, false); n++; }
+    } else {
+      for (var j = 0; j + 1 < list.length; j += 2) { makeGroup([list[j], list[j + 1]], false); n++; }
+    }
     picked = [];
     renderRoster(); renderPairs();
-    toast(n ? n + (n === 1 ? ' pair made' : ' pairs made') + (list.length % 2 ? '. One student is waiting for a partner.' : '') : 'Need two unpaired students');
+    toast(n ? 'Groups made' : 'Need two unpaired students');
   }
 
   function rosterEmptyText() {
@@ -324,7 +501,7 @@
     return 'No pairs yet. Students show up above after they join. Pair them before they can text each other.';
   }
   function studentStatus(s, partner) {
-    if (s.linking && !s.online) return '· opening chat line';
+    if (s.linking && !s.online) return '· opening chat line — ask them to tap Reconnect';
     if (!s.online) return '· offline';
     if (partner) return '· with ' + partner.name;
     return '· unpaired';
@@ -354,14 +531,27 @@
       if (s.linking && !s.online) cls += ' linking';
       else if (!s.online) cls += ' offline';
       if (flagged) cls += ' flagged';
-      var b = el('button', cls);
-      b.type = 'button'; b.setAttribute('data-id', sid); b.setAttribute('aria-pressed', picked.indexOf(sid) >= 0 ? 'true' : 'false');
+      var b = el('div', cls);
+      b.setAttribute('data-id', sid);
+      var main = el('button', '');
+      main.type = 'button';
+      main.setAttribute('aria-pressed', picked.indexOf(sid) >= 0 ? 'true' : 'false');
       var av = el('span', 'av', (s.name || '?').charAt(0).toUpperCase());
-      b.appendChild(av); b.appendChild(document.createTextNode((s.name || 'Student') + ' '));
-      var partner = s.pairId && session.pairs[s.pairId] ? session.students[session.pairs[s.pairId].a === sid ? session.pairs[s.pairId].b : session.pairs[s.pairId].a] : null;
-      b.appendChild(el('small', '', studentStatus(s, partner)));
-      if (flagged) b.appendChild(el('small', 'flag-pill', ' FLAG'));
-      b.addEventListener('click', function () { pick(sid); });
+      main.appendChild(av); main.appendChild(document.createTextNode((s.name || 'Student') + ' '));
+      var partnerSid = null;
+      if (s.pairId && session.pairs[s.pairId]) {
+        var others = membersOf(session.pairs[s.pairId]).filter(function (id) { return id !== sid; });
+        partnerSid = others[0];
+      }
+      var partner = partnerSid ? session.students[partnerSid] : null;
+      main.appendChild(el('small', '', studentStatus(s, partner)));
+      if (flagged) main.appendChild(el('small', 'flag-pill', ' FLAG'));
+      main.addEventListener('click', function () { pick(sid); });
+      var del = el('button', 'stu-x', 'Delete');
+      del.type = 'button';
+      del.addEventListener('click', function (ev) { ev.stopPropagation(); deleteStudent(sid); });
+      b.appendChild(main);
+      b.appendChild(del);
       box.appendChild(b);
     });
   }
@@ -406,18 +596,41 @@
     if (!session || !session.pairOrder.length) { box.appendChild(el('div', 'empty', pairsEmptyText())); return; }
     session.pairOrder.forEach(function (id) {
       var pair = session.pairs[id]; if (!pair) return;
-      var A = session.students[pair.a] || { name: '?' }, B = session.students[pair.b] || { name: '?' };
-      var pairFlags = (session.flags || []).filter(function (f) { return f.sid === pair.a || f.sid === pair.b || f.pairId === id; });
+      if (pair.archived) {
+        card = el('div', 'pair');
+        card.setAttribute('data-pair', id);
+        var old = el('div', 'pair-head');
+        old.appendChild(el('div', 'pair-names', 'Earlier group'));
+        membersOf(pair).forEach(function (sid) {
+          old.appendChild(el('span', '', ' ' + ((session.students[sid] || {}).name || 'Student')));
+        });
+        card.appendChild(old);
+        var oldTx = el('div', 'tx');
+        (pair.transcript || []).forEach(function (ln) {
+          if (ln.removedByTeacher) return;
+          oldTx.appendChild(el('div', 'line a', (ln.name || '') + ': ' + (ln.text || '')));
+        });
+        card.appendChild(oldTx);
+        box.appendChild(card);
+        return;
+      }
+      var mem = membersOf(pair);
+      var pairFlags = (session.flags || []).filter(function (f) { return mem.indexOf(f.sid) >= 0 || f.pairId === id; });
       var paused = !!(pair.frozen || session.frozen);
       var card = el('div', 'pair' + (pairFlags.length ? ' has-flag' : '') + (paused ? ' is-frozen' : '')); card.setAttribute('data-pair', id);
       card.setAttribute('data-frozen', paused ? 'yes' : 'no');
       card.setAttribute('data-pair-frozen', pair.frozen ? 'yes' : 'no');
       var head = el('div', 'pair-head');
       var names = el('div', 'pair-names');
-      names.appendChild(el('span', 'dot' + (A.online ? ' on' : ''))); names.appendChild(el('span', '', A.name));
-      names.appendChild(el('span', 'muted', '+'));
-      names.appendChild(el('span', 'dot' + (B.online ? ' on' : ''))); names.appendChild(el('span', '', B.name));
-      names.appendChild(el('span', 'muted', (A.online && B.online) ? 'both connected' : 'waiting for a connection'));
+      var onlineN = 0;
+      mem.forEach(function (sid, i) {
+        var st = session.students[sid] || { name: 'Removed', online: false };
+        if (i) names.appendChild(el('span', 'muted', '+'));
+        names.appendChild(el('span', 'dot' + (st.online ? ' on' : '')));
+        names.appendChild(el('span', '', st.name + (session.students[sid] ? '' : ' (removed)')));
+        if (st.online) onlineN += 1;
+      });
+      names.appendChild(el('span', 'muted', onlineN === mem.length ? 'all connected' : 'waiting for a connection'));
       head.appendChild(names);
       var c = convoFor(pair), steps = (c && c.steps) || [], st = pair.step || 0;
       var level = pair.level || session.level;
@@ -426,7 +639,9 @@
         stepLine.textContent = 'Level ' + level + ' · Open Italian chat';
       } else if (c && st < steps.length) {
         stepLine.textContent = 'Level ' + level + ' · ' + c.title + ' · Step ' + (st + 1) + ' of ' + steps.length + ': ' + steps[st].prompt + ' · Turn: ';
-        stepLine.appendChild(el('b', '', st % 2 === 0 ? A.name : B.name));
+        var turnSid = mem[st % Math.max(mem.length, 1)] || mem[0];
+        var turnName = (session.students[turnSid] || {}).name || 'Student';
+        stepLine.appendChild(el('b', '', turnName));
       } else if (c) {
         stepLine.textContent = 'Level ' + level + ' · ' + c.title + ' · Guided steps done, free Italian now';
       } else stepLine.textContent = 'Level ' + level;
@@ -447,28 +662,68 @@
       }
       var tx = el('div', 'tx'); tx.setAttribute('data-role', 'transcript');
       if (!pair.transcript.length) tx.appendChild(el('div', 'empty', 'No lines sent yet.'));
+      var stick = tx.getAttribute('data-stick') !== 'no';
       pair.transcript.forEach(function (ln) {
+        if (ln.removedByTeacher) return;
         var b = el('div', 'line ' + (ln.from === pair.a ? 'a' : 'b'));
         b.setAttribute('data-text', ln.text); b.setAttribute('data-from', ln.name);
-        var t = new Date(ln.at);
-        b.appendChild(el('span', 'meta', ln.name + ' · ' + t.getHours() + ':' + String(t.getMinutes()).padStart(2, '0')));
-        b.appendChild(document.createTextNode(ln.text));
+        if (ln.id) b.setAttribute('data-line-id', ln.id);
+        var t = new Date(ln.at || Date.now());
+        var meta = ln.name + ' · ' + t.getHours() + ':' + String(t.getMinutes()).padStart(2, '0');
+        if (ln.deletedByStudent) meta += ' · deleted by student';
+        if (ln.answeredQuestion) meta += ' · answered today\'s question';
+        b.appendChild(el('span', 'meta', meta));
+        b.appendChild(document.createTextNode(ln.deletedByStudent ? ln.text : ln.text));
+        if (ln.original && ln.original !== ln.text) b.appendChild(el('span', 'meta', 'wrote: ' + ln.original));
+        var del = el('button', '', 'Delete');
+        del.type = 'button';
+        del.addEventListener('click', function () { deleteTranscriptLine(id, ln.id); });
+        b.appendChild(del);
         tx.appendChild(b);
       });
       card.appendChild(tx);
       var foot = el('div', 'pair-foot');
       if (session.frozen) foot.appendChild(el('span', 'pair-frozen-note', 'Class chat is paused'));
       else if (pair.frozen) foot.appendChild(el('span', 'pair-frozen-note', 'This pair is paused'));
-      var fb = el('button', pair.frozen ? 'good' : 'warn', pair.frozen ? 'Unfreeze pair' : 'Freeze pair');
+      var fb = el('button', pair.frozen ? 'good' : 'warn', pair.frozen ? 'Unfreeze group' : 'Freeze group');
       fb.type = 'button';
       fb.setAttribute('data-role', 'freeze-pair');
       fb.setAttribute('aria-pressed', pair.frozen ? 'true' : 'false');
       fb.addEventListener('click', function () { togglePairFreeze(id); });
-      var ub = el('button', '', 'Unpair'); ub.type = 'button'; ub.addEventListener('click', function () { unpair(id); });
+      if (mem.length < 3) {
+        var add = el('button', '', 'Add student');
+        add.type = 'button';
+        add.setAttribute('data-role', 'add-student');
+        add.addEventListener('click', function () {
+          if (picked.length !== 1) { toast('Tap one unpaired student, then Add student'); return; }
+          addToGroup(id, picked[0]);
+          picked = [];
+        });
+        foot.appendChild(add);
+      }
+      var ub = el('button', '', mem.length > 2 ? 'Split group' : 'Unpair'); ub.type = 'button'; ub.addEventListener('click', function () { unpair(id); });
       foot.appendChild(fb); foot.appendChild(ub); card.appendChild(foot);
       box.appendChild(card);
-      tx.scrollTop = tx.scrollHeight;
+      if (stick) tx.scrollTop = tx.scrollHeight;
     });
+    var scope = $('questionScope');
+    if (scope && session) {
+      var keep = scope.value;
+      scope.textContent = '';
+      var opt = document.createElement('option');
+      opt.value = 'class';
+      opt.textContent = 'Whole class';
+      scope.appendChild(opt);
+      session.pairOrder.forEach(function (pid) {
+        var p = session.pairs[pid];
+        if (!p || p.archived) return;
+        var o = document.createElement('option');
+        o.value = pid;
+        o.textContent = membersOf(p).map(function (sid) { return (session.students[sid] || {}).name || 'Student'; }).join(' + ');
+        scope.appendChild(o);
+      });
+      if (keep) scope.value = keep;
+    }
   }
 
   function partnerOf(pair, sid) { return pair.a === sid ? pair.b : pair.a; }
@@ -476,14 +731,17 @@
   function onMsg(sid, data) {
     if (!session || !data || typeof data !== 'object') return;
     if (data.type === 'join') {
+      if (session.blocked && session.blocked[sid]) { send(sid, { type: 'removed' }); return; }
       var prev = session.students[sid];
       var hinted = connName(sid);
       var name = String(data.name || hinted || 'Student').trim().split(/\s+/)[0].slice(0, 18) || 'Student';
-      session.students[sid] = { id: sid, name: name, online: true, linking: false, pairId: prev ? prev.pairId : null, joinedAt: prev ? prev.joinedAt : Date.now() };
+      session.students[sid] = { id: sid, name: name, browserId: (prev && prev.browserId) || sid, online: true, linking: false, pairId: prev ? prev.pairId : null, joinedAt: prev ? prev.joinedAt : Date.now() };
       send(sid, { type: 'welcome', className: session.className || 'Italian class', level: session.level, locked: session.locked, classFrozen: !!session.frozen });
       var pair = session.students[sid].pairId && session.pairs[session.students[sid].pairId];
-      if (pair) { send(sid, pairMsg(pair, sid)); send(partnerOf(pair, sid), { type: 'partner_status', online: true }); }
+      if (pair) { send(sid, pairMsg(pair, sid)); membersOf(pair).forEach(function (id) { if (id !== sid) send(id, { type: 'partner_status', online: true }); }); }
+      else maybeJoinOpenPair(sid);
       pushFreeze(sid);
+      send(sid, clockFor(sid));
       save(); renderRoster(); renderPairs();
       if (!(prev && prev.online && prev.name === name)) toast(name + ' joined');
       return;
@@ -498,30 +756,58 @@
     var pr = st.pairId && session.pairs[st.pairId];
     if (!pr || (data.pairId && data.pairId !== pr.id)) return;
     var other = partnerOf(pr, sid);
+    if (data.type === 'delete_line') {
+      (pr.transcript || []).forEach(function (ln) {
+        if (ln.id && ln.id === data.lineId) { ln.deletedByStudent = true; ln.deletedAt = Date.now(); }
+      });
+      membersOf(pr).forEach(function (id) { if (id !== sid) send(id, { type: 'delete_line', pairId: pr.id, lineId: data.lineId }); });
+      save(); renderPairs();
+      return;
+    }
+    if (data.type === 'ask') {
+      session.asks = session.asks || [];
+      session.asks.push({ id: 'q' + Date.now().toString(36), sid: sid, name: st.name, text: String(data.text || '').slice(0, 200), at: Date.now(), reply: '' });
+      save(); renderAsks();
+      return;
+    }
     if (data.type === 'line') {
       if (session.frozen || pr.frozen) return;
       var text = String(data.text || '').trim().slice(0, 300);
+      var original = String(data.original || text).slice(0, 300);
       if (!text) return;
-      var lineHit = window.IgcSafety && IgcSafety.scan(text);
-      if (lineHit) { recordFlag(sid, text, lineHit.category); return; }
+      var lineHit = window.IgcSafety && IgcSafety.scan(original);
+      if (lineHit) { recordFlag(sid, original, lineHit.category); return; }
+      if (window.IgcCoach && convos.length) {
+        var judged = IgcCoach.judge(original, IgcCoach.prepare(convos));
+        if (judged.action === 'swear') { recordFlag(sid, original, judged.category || 'swear'); return; }
+        if (judged.action === 'english' || judged.action === 'emoji') return;
+      }
       var step = typeof data.step === 'number' ? data.step : pr.step;
       pr.step = step;
       if (data.level) pr.level = String(data.level);
       if (data.convoId) pr.convoId = String(data.convoId);
-      pr.transcript.push({ from: sid, name: st.name, text: text, step: step, level: pr.level, at: data.at || Date.now() });
-      send(other, { type: 'line', pairId: pr.id, from: st.name, text: text, step: step, level: pr.level });
+      var lineId = data.lineId || ('m' + Date.now().toString(36));
+      pr.transcript.push({ id: lineId, from: sid, name: st.name, text: text, original: original, step: step, level: pr.level, at: data.at || Date.now(), answeredQuestion: !!data.answeredQuestion });
+      if (session.phase === 'goodbye') {
+        pr.goodbyes = pr.goodbyes || {};
+        pr.goodbyes[sid] = true;
+      }
+      membersOf(pr).forEach(function (id) {
+        if (id !== sid) send(id, { type: 'line', pairId: pr.id, lineId: lineId, from: st.name, text: text, step: step, level: pr.level });
+      });
       save(); renderPairs();
+      maybeFinishGoodbye();
       return;
     }
     if (data.type === 'level_change' && !session.locked && data.level) {
       pr.level = String(data.level); pr.convoId = null; pr.step = 0;
-      send(other, { type: 'level', level: pr.level, locked: false });
+      membersOf(pr).forEach(function (id) { if (id !== sid) send(id, { type: 'level', level: pr.level, locked: false }); });
       save(); renderPairs();
       return;
     }
     if (data.type === 'convo_change' && !session.locked && data.id) {
       pr.convoId = String(data.id); pr.step = 0;
-      send(other, { type: 'convo', id: pr.convoId });
+      membersOf(pr).forEach(function (id) { if (id !== sid) send(id, { type: 'convo', id: pr.convoId }); });
       save(); renderPairs();
     }
   }
@@ -534,27 +820,70 @@
     var raw = conn && conn.metadata && conn.metadata.name;
     return String(raw || '').trim().split(/\s+/)[0].slice(0, 18);
   }
-  function noteLinking(sid, name) {
+  function browserOf(conn) {
+    var meta = (conn && conn.metadata) || {};
+    return String(meta.browserId || meta.studentId || connSid(conn) || '').replace(/[^a-zA-Z0-9]/g, '');
+  }
+  function dropOtherLinks(browserId, keep) {
+    if (!session || !browserId) return;
+    Object.keys(session.students).forEach(function (sid) {
+      if (sid === keep) return;
+      var s = session.students[sid];
+      if (!s || s.online) return;
+      if (s.browserId === browserId || sid === browserId) {
+        if (s.pairId && session.pairs[s.pairId]) return;
+        delete session.students[sid];
+      }
+    });
+  }
+  function noteLinking(sid, name, browserId) {
     if (!session || !name) return;
+    if (session.blocked && session.blocked[sid]) return;
+    dropOtherLinks(browserId || sid, sid);
     var prev = session.students[sid];
     if (prev && prev.online) return;
     session.students[sid] = {
       id: sid,
       name: name,
+      browserId: browserId || (prev && prev.browserId) || sid,
       online: false,
       linking: true,
       pairId: prev ? prev.pairId : null,
-      joinedAt: prev ? prev.joinedAt : Date.now()
+      joinedAt: prev ? prev.joinedAt : Date.now(),
+      linkedAt: Date.now()
     };
     save();
     renderRoster();
     renderPairs();
   }
+  function shrinkGroup(pair, sid) {
+    var rest = membersOf(pair).filter(function (id) { return id !== sid; });
+    if (rest.length >= 2) {
+      pair.members = rest;
+      syncMembers(pair);
+      rest.forEach(function (id) {
+        if (session.students[id]) session.students[id].pairId = pair.id;
+        send(id, pairMsg(pair, id));
+      });
+      return true;
+    }
+    rest.forEach(function (id) {
+      if (session.students[id]) session.students[id].pairId = null;
+      send(id, { type: 'unpaired' });
+    });
+    delete session.pairs[pair.id];
+    session.pairOrder = session.pairOrder.filter(function (x) { return x !== pair.id; });
+    return false;
+  }
   function onConnection(conn) {
     var sid = connSid(conn);
+    if (session && session.blocked && session.blocked[sid]) {
+      try { conn.close(); } catch (e) {}
+      return;
+    }
     if (conns[sid] && conns[sid] !== conn) { try { conns[sid].close(); } catch (e) {} }
     conns[sid] = conn;
-    noteLinking(sid, connName(sid));
+    noteLinking(sid, connName(sid) || (session.students[sid] && session.students[sid].name), browserOf(conn));
     conn.on('data', function (d) { onMsg(sid, d); });
     conn.on('close', function () {
       if (conns[sid] !== conn) return;
@@ -564,7 +893,14 @@
         s.online = false;
         s.linking = false;
         var pair = s.pairId && session.pairs[s.pairId];
-        if (pair) send(partnerOf(pair, sid), { type: 'partner_status', online: false });
+        if (pair && membersOf(pair).length >= 3) {
+          s.pairId = null;
+          shrinkGroup(pair, sid);
+        } else if (pair) {
+          membersOf(pair).forEach(function (id) {
+            if (id !== sid) send(id, { type: 'partner_status', online: false });
+          });
+        }
         picked = picked.filter(function (x) { return x !== sid; });
         save(); renderRoster(); renderPairs();
       }
@@ -675,7 +1011,12 @@
     setHubNote(restored
       ? 'This is the same class. Students who disconnected can stay on their page or tap Join again.'
       : 'Students join from their own Chromebook with this code.');
+    if (session && session.autoRotate !== false && !session.rotateEndsAt && session.phase !== 'goodbye') {
+      session.rotateEndsAt = Date.now() + (session.rotateMinutes || 5) * 60000;
+    }
     renderRoster(); renderPairs();
+    broadcastClock();
+    renderPast();
     toast(restored ? 'Class restored. Same code.' : 'Session live. Share the code.');
   }
   function onHubFail(err) {
@@ -703,12 +1044,21 @@
     var u = joinUrl(); $('joinUrl').textContent = u; $('joinUrl').href = u;
     $('btnEnd').disabled = false; $('btnCreate').disabled = true; $('reopenRow').hidden = true;
     $('className').value = session.className; $('levelSel').value = session.level; $('lockLevel').checked = session.locked;
+    if ($('autoRotate')) $('autoRotate').checked = session.autoRotate !== false;
+    if ($('rotateMinutes')) $('rotateMinutes').value = session.rotateMinutes || 5;
+    if ($('todayQuestion')) $('todayQuestion').value = session.question || '';
+    if ($('todayStarters')) $('todayStarters').value = (session.starters || []).join('\n');
+    renderQuestionIdeas();
+    renderAsks();
+    renderPast();
     refreshJoinLink();
   }
   function createSession() {
     var code = makeCode();
     session = { code: code, className: ($('className').value || '').trim().slice(0, 40), pin: ($('pin').value || '').trim().slice(0, 8),
-      level: $('levelSel').value, locked: $('lockLevel').checked, frozen: false, students: {}, pairs: {}, pairOrder: [], flags: [], createdAt: Date.now(), active: true, ended: false };
+      level: $('levelSel').value, locked: $('lockLevel').checked, frozen: false, students: {}, pairs: {}, pairOrder: [], flags: [], createdAt: Date.now(), active: true, ended: false,
+      autoRotate: $('autoRotate') ? $('autoRotate').checked : true, rotateMinutes: rotateMinutes(), rotateEndsAt: Date.now() + rotateMinutes() * 60000,
+      phase: 'chat', history: [], question: '', starters: [], asks: [], blocked: {} };
     save();
     $('btnCreate').disabled = true;
     $('hubHelp').hidden = true;
@@ -736,7 +1086,19 @@
     session.pairOrder = session.pairOrder || [];
     session.students = session.students || {};
     session.frozen = !!session.frozen;
-    Object.keys(session.pairs).forEach(function (id) { session.pairs[id].frozen = !!session.pairs[id].frozen; });
+    session.history = session.history || [];
+    session.asks = session.asks || [];
+    session.blocked = session.blocked || {};
+    session.starters = session.starters || [];
+    session.question = session.question || '';
+    if (session.autoRotate === undefined) session.autoRotate = true;
+    session.rotateMinutes = session.rotateMinutes || 5;
+    session.phase = session.phase || 'chat';
+    Object.keys(session.pairs).forEach(function (id) {
+      session.pairs[id].frozen = !!session.pairs[id].frozen;
+      session.pairs[id].goodbyes = session.pairs[id].goodbyes || {};
+      syncMembers(session.pairs[id]);
+    });
     session.active = true;
     session.ended = false;
     Object.keys(session.students).forEach(function (sid) { session.students[sid].online = false; });
@@ -777,6 +1139,7 @@
     peer = null; conns = {}; picked = [];
     hubAttempt += 1;
     session.active = false; session.ended = true;
+    archiveSession(session);
     save(); session = null;
     $('sessionBlock').hidden = true; $('btnEnd').disabled = true; $('btnCreate').disabled = false;
     setHub(false, 'Offline'); renderRoster(); renderPairs(); checkReopen();
@@ -794,12 +1157,379 @@
   }
   function checkReopen() { var s = load(); $('reopenRow').hidden = !(s && s.code) || !!session; }
 
+  function rotateMinutes() {
+    var n = $('rotateMinutes') ? parseFloat($('rotateMinutes').value) : 5;
+    if (!n || n < 0.5) n = 5;
+    return n;
+  }
+  function renderTeacherClock() {
+    var el = $('rotateClock');
+    if (!el) return;
+    if (!session || session.autoRotate === false) { el.textContent = 'Auto-rotate is off'; return; }
+    if (session.frozen) { el.textContent = 'Paused'; return; }
+    var end = session.phase === 'goodbye' ? session.goodbyeEndsAt : session.rotateEndsAt;
+    var sec = Math.max(0, Math.ceil(((end || 0) - Date.now()) / 1000));
+    var m = Math.floor(sec / 60), r = sec % 60;
+    el.textContent = (session.phase === 'goodbye' ? 'Goodbye ' : 'Time left ') + m + ':' + (r < 10 ? '0' : '') + r;
+  }
+  function readPast() {
+    try { var v = JSON.parse(localStorage.getItem(PAST_KEY) || '[]'); return Array.isArray(v) ? v : []; } catch (e) { return []; }
+  }
+  function writePast(list) { try { localStorage.setItem(PAST_KEY, JSON.stringify(list)); } catch (e) {} }
+  function archiveSession(snap) {
+    if (!snap) return;
+    var list = readPast();
+    list.push({ id: snap.code + '-' + (snap.createdAt || Date.now()), className: snap.className || 'Class', level: snap.level, createdAt: snap.createdAt || Date.now(), endedAt: Date.now(), snapshot: snap });
+    writePast(list);
+    renderPast();
+  }
+  function renderPast() {
+    var box = $('pastSessions');
+    if (!box) return;
+    box.textContent = '';
+    if (session && session.code) {
+      var cur = el('div', 'flag');
+      cur.appendChild(el('span', 'flag-who', (session.className || 'This class') + ' · Level ' + session.level + ' · running'));
+      var delCur = el('button', 'danger', 'Delete');
+      delCur.type = 'button';
+      delCur.addEventListener('click', function () {
+        if (!confirm('Delete the class that is running? Students will be told the session ended.')) return;
+        endSession();
+      });
+      cur.appendChild(delCur);
+      box.appendChild(cur);
+    }
+    readPast().forEach(function (item, index) {
+      var row = el('div', 'flag');
+      var when = new Date(item.createdAt || Date.now());
+      row.appendChild(el('span', 'flag-who', (item.className || 'Class') + ' · Level ' + (item.level || '?') + ' · ' + when.toLocaleDateString()));
+      var del = el('button', '', 'Delete');
+      del.type = 'button';
+      del.addEventListener('click', function () {
+        if (!confirm('Delete this past class from this browser?')) return;
+        var list = readPast();
+        list.splice(index, 1);
+        writePast(list);
+        renderPast();
+      });
+      row.appendChild(del);
+      box.appendChild(row);
+    });
+  }
+  function builtinQuestion(text) {
+    var key = String(text || '').replace(/\s+/g, ' ').trim().toLowerCase();
+    for (var i = 0; i < questionBank.length; i++) {
+      var forms = [questionBank[i].q].concat(questionBank[i].also || []);
+      for (var j = 0; j < forms.length; j++) {
+        if (String(forms[j] || '').replace(/\s+/g, ' ').trim().toLowerCase() === key) return questionBank[i];
+      }
+    }
+    return null;
+  }
+  function renderQuestionIdeas() {
+    var box = $('questionIdeas');
+    if (!box) return;
+    box.textContent = '';
+    var level = session ? session.level : ($('levelSel') && $('levelSel').value);
+    questionBank.filter(function (q) { return String(q.level) === String(level); }).forEach(function (q) {
+      [q.q].concat(q.also || []).forEach(function (form) {
+        if (!form) return;
+        var b = el('button', '', form);
+        b.type = 'button';
+        b.addEventListener('click', function () {
+          $('todayQuestion').value = form;
+          if (!$('todayStarters').value.trim()) $('todayStarters').value = (q.starters || []).join('\n');
+        });
+        box.appendChild(b);
+      });
+    });
+  }
+  function startersFromInput() {
+    return String($('todayStarters').value || '').split(/\n/).map(function (s) { return s.trim(); }).filter(Boolean);
+  }
+  function applyQuestion(scope) {
+    if (!session) { toast('Create a session first'); return; }
+    var text = String($('todayQuestion').value || '').trim();
+    if (!text) { clearQuestion(); return; }
+    var typed = startersFromInput();
+    var built = builtinQuestion(text);
+    var starters = typed.length ? typed : ((built && built.starters) || []);
+    var hint = $('questionHint');
+    if (!starters.length && hint) hint.textContent = 'Add starter phrases so students have help.';
+    else if (hint) hint.textContent = 'Students will see this question pinned on their chat.';
+    if (!scope || scope === 'class') {
+      session.question = text;
+      session.starters = starters;
+      Object.keys(session.students).forEach(function (sid) {
+        send(sid, { type: 'question', text: text, starters: starters });
+      });
+    } else if (session.pairs[scope]) {
+      session.pairs[scope].question = text;
+      session.pairs[scope].starters = starters;
+      membersOf(session.pairs[scope]).forEach(function (sid) {
+        send(sid, { type: 'question', text: text, starters: starters });
+      });
+    }
+    save(); renderPairs();
+    toast('Today\'s question is set');
+  }
+  function clearQuestion() {
+    if (!session) return;
+    session.question = '';
+    session.starters = [];
+    Object.keys(session.pairs).forEach(function (id) { session.pairs[id].question = ''; session.pairs[id].starters = []; });
+    Object.keys(session.students).forEach(function (sid) { send(sid, { type: 'question', text: '', starters: [] }); });
+    if ($('todayQuestion')) $('todayQuestion').value = '';
+    if ($('todayStarters')) $('todayStarters').value = '';
+    save();
+    toast('Question cleared');
+  }
+  function renderAsks() {
+    var box = $('asks');
+    if (!box) return;
+    box.textContent = '';
+    var list = (session && session.asks) || [];
+    if (!list.length) { box.appendChild(el('div', 'empty', 'No requests yet.')); return; }
+    list.slice().reverse().forEach(function (ask) {
+      var row = el('div', 'flag');
+      row.appendChild(el('span', 'flag-who', ask.name));
+      row.appendChild(el('p', 'flag-text', ask.text));
+      if (ask.reply) row.appendChild(el('p', 'flag-text', 'Answered: ' + ask.reply));
+      var input = document.createElement('input');
+      input.value = ask.reply || '';
+      input.placeholder = 'Italian answer';
+      input.maxLength = 160;
+      var sendBtn = el('button', '', 'Send answer');
+      sendBtn.type = 'button';
+      sendBtn.addEventListener('click', function () {
+        ask.reply = input.value.trim();
+        if (!ask.reply) return;
+        send(ask.sid, { type: 'gloss_answer', en: ask.text, it: ask.reply });
+        save(); renderAsks();
+        toast('Answer sent to ' + ask.name);
+      });
+      var add = el('button', '', 'Add to glossary');
+      add.type = 'button';
+      add.addEventListener('click', function () {
+        var it = input.value.trim();
+        if (!it) { toast('Type the Italian first'); return; }
+        session.glossaryAdds = session.glossaryAdds || [];
+        session.glossaryAdds.push({ en: [ask.text], it: [it] });
+        send(ask.sid, { type: 'gloss_add', en: ask.text, it: it });
+        save();
+        toast('Saved for this class');
+      });
+      row.appendChild(input);
+      row.appendChild(sendBtn);
+      row.appendChild(add);
+      box.appendChild(row);
+    });
+  }
+  function deleteStudent(sid) {
+    if (!session || !session.students[sid]) return;
+    var name = session.students[sid].name || 'Student';
+    if (!confirm('Remove ' + name + ' from this class?')) return;
+    var s = session.students[sid];
+    send(sid, { type: 'removed' });
+    if (s.pairId && session.pairs[s.pairId]) {
+      var pair = session.pairs[s.pairId];
+      var rest = membersOf(pair).filter(function (id) { return id !== sid; });
+      if (rest.length >= 2) {
+        pair.members = rest;
+        syncMembers(pair);
+        rest.forEach(function (id) { send(id, pairMsg(pair, id)); });
+      } else {
+        rest.forEach(function (id) {
+          if (session.students[id]) session.students[id].pairId = null;
+          send(id, { type: 'unpaired' });
+        });
+        delete session.pairs[pair.id];
+        session.pairOrder = session.pairOrder.filter(function (x) { return x !== pair.id; });
+      }
+    }
+    if ($('blockRejoin') && $('blockRejoin').checked) {
+      session.blocked[sid] = true;
+    }
+    if (conns[sid]) { try { conns[sid].close(); } catch (e) {} delete conns[sid]; }
+    delete session.students[sid];
+    save(); renderRoster(); renderPairs();
+    toast(name + ' was removed');
+  }
+  function deleteTranscriptLine(pairId, lineId) {
+    var pair = session && session.pairs[pairId];
+    if (!pair) return;
+    var ln = null;
+    (pair.transcript || []).forEach(function (row) { if (row.id === lineId) ln = row; });
+    if (!ln) return;
+    var flagged = (session.flags || []).some(function (f) { return f.text === ln.original || f.text === ln.text; });
+    var msg = flagged
+      ? 'This line was flagged. Remove it from the students\' screens? The flag record stays.'
+      : 'Delete this line from the transcript and from the students\' screens?';
+    if (!confirm(msg)) return;
+    ln.removedByTeacher = true;
+    if (flagged) {
+      session.flags.push({ sid: ln.from, name: ln.name, pairId: pairId, text: 'flagged message removed by teacher', category: 'swear', at: Date.now(), removed: true });
+    }
+    membersOf(pair).forEach(function (sid) { send(sid, { type: 'remove_line', pairId: pairId, lineId: lineId }); });
+    save(); renderPairs();
+  }
+  function maybeJoinOpenPair(sid) {
+    if (!session || session.autoRotate === false) return;
+    var s = session.students[sid];
+    if (!s || s.pairId || !s.online) return;
+    var found = null;
+    session.pairOrder.forEach(function (id) {
+      var p = session.pairs[id];
+      if (found || !p || p.archived || p.frozen) return;
+      if (membersOf(p).length === 2) found = p;
+    });
+    if (found) addToGroup(found.id, sid);
+  }
+  function readyIds() {
+    return Object.keys(session.students).filter(function (sid) {
+      var s = session.students[sid];
+      if (!s || !s.online || s.linking) return false;
+      var pair = s.pairId && session.pairs[s.pairId];
+      if (pair && pair.frozen) return false;
+      return true;
+    });
+  }
+  function scorePair(a, b) {
+    if (!workedTogether(a, b)) return 0;
+    return lastTogether(a, b) || 1;
+  }
+  function planGroups(ids) {
+    var pool = ids.slice();
+    var groups = [];
+    var madeTrio = false;
+    var guard = 0;
+    while (pool.length >= 2 && guard++ < 20) {
+      if (!madeTrio && pool.length % 2 === 1 && pool.length >= 3) {
+        var best = null;
+        for (var i = 0; i < pool.length; i++) for (var j = i + 1; j < pool.length; j++) for (var k = j + 1; k < pool.length; k++) {
+          var sc = scorePair(pool[i], pool[j]) + scorePair(pool[i], pool[k]) + scorePair(pool[j], pool[k]);
+          if (!best || sc < best.sc) best = { ids: [pool[i], pool[j], pool[k]], sc: sc };
+        }
+        groups.push(best.ids);
+        best.ids.forEach(function (id) { pool.splice(pool.indexOf(id), 1); });
+        madeTrio = true;
+        continue;
+      }
+      var pair = null;
+      for (var x = 0; x < pool.length; x++) for (var y = x + 1; y < pool.length; y++) {
+        var s2 = scorePair(pool[x], pool[y]);
+        if (!pair || s2 < pair.sc) pair = { ids: [pool[x], pool[y]], sc: s2 };
+      }
+      groups.push(pair.ids);
+      pair.ids.forEach(function (id) { pool.splice(pool.indexOf(id), 1); });
+    }
+    return groups;
+  }
+  function startGoodbye() {
+    if (!session) return;
+    session.phase = 'goodbye';
+    session.goodbyeEndsAt = Date.now() + 45000;
+    session.pairOrder.forEach(function (id) {
+      var p = session.pairs[id];
+      if (!p || p.frozen) return;
+      p.goodbyes = {};
+    });
+    broadcastClock();
+    save();
+  }
+  function maybeFinishGoodbye() {
+    if (!session || session.phase !== 'goodbye') return;
+    var done = true;
+    session.pairOrder.forEach(function (id) {
+      var p = session.pairs[id];
+      if (!p || p.frozen) return;
+      membersOf(p).forEach(function (sid) {
+        var st = session.students[sid];
+        if (st && st.online && !(p.goodbyes && p.goodbyes[sid])) done = false;
+      });
+    });
+    if (done) doRotate();
+  }
+  var rotating = false;
+  function doRotate() {
+    if (!session || rotating) return;
+    rotating = true;
+    try { doRotateBody(); } catch (e) { console.log("rotate error", e && e.message); }
+    rotating = false;
+  }
+  function doRotateBody() {
+    if (!session) return;
+    var keep = [];
+    session.pairOrder.forEach(function (id) {
+      var p = session.pairs[id];
+      if (!p) return;
+      if (p.frozen) { keep.push(id); return; }
+      membersOf(p).forEach(function (sid) { if (session.students[sid]) session.students[sid].pairId = null; });
+      p.archived = true;
+    });
+    var groups = planGroups(readyIds());
+    groups.forEach(function (ids) { var g = makeGroup(ids, true); if (g) keep.push(g.id); });
+    session.pairOrder = keep.concat(session.pairOrder.filter(function (id) {
+      return session.pairs[id] && session.pairs[id].archived && keep.indexOf(id) < 0;
+    }));
+    session.phase = 'chat';
+    session.rotateEndsAt = Date.now() + rotateMinutes() * 60000;
+    session.goodbyeEndsAt = null;
+    broadcastClock();
+    save(); renderRoster(); renderPairs();
+    toast('New partners');
+  }
+  function tickRotation() {
+    renderTeacherClock();
+    if (!session || session.autoRotate === false || session.frozen || !hubLive) return;
+    var now = Date.now();
+    if (session.phase === 'goodbye') {
+      if (session.goodbyeEndsAt && now >= session.goodbyeEndsAt) doRotate();
+      return;
+    }
+    if (session.rotateEndsAt && now >= session.rotateEndsAt) startGoodbye();
+  }
+  function expireLinks() {
+    if (!session) return;
+    var now = Date.now();
+    var changed = false;
+    Object.keys(session.students).forEach(function (sid) {
+      var s = session.students[sid];
+      if (s && s.linking && !s.online && !s.pairId && now - (s.linkedAt || s.joinedAt || now) > 45000) {
+        delete session.students[sid];
+        changed = true;
+      }
+    });
+    if (changed) { save(); renderRoster(); }
+  }
+  setInterval(function () { tickRotation(); expireLinks(); }, 1000);
   $('btnCreate').addEventListener('click', createSession);
   $('btnReopen').addEventListener('click', reopenSession);
   $('btnReconnect').addEventListener('click', reconnectHub);
   $('btnEnd').addEventListener('click', endSession);
   $('btnAutoPair').addEventListener('click', autoPair);
   $('btnFreeze').addEventListener('click', toggleClassFreeze);
+  if ($('btnRotate')) $('btnRotate').addEventListener('click', function () { if (session) startGoodbye(); });
+  if ($('autoRotate')) $('autoRotate').addEventListener('change', function () {
+    if (!session) return;
+    session.autoRotate = $('autoRotate').checked;
+    if (session.autoRotate && !session.rotateEndsAt && session.phase !== 'goodbye') session.rotateEndsAt = Date.now() + rotateMinutes() * 60000;
+    save(); broadcastClock();
+  });
+  if ($('rotateMinutes')) $('rotateMinutes').addEventListener('change', function () {
+    if (!session) return;
+    session.rotateMinutes = rotateMinutes();
+    if (session.phase !== 'goodbye' && !session.frozen) session.rotateEndsAt = Date.now() + session.rotateMinutes * 60000;
+    save(); broadcastClock();
+  });
+  if ($('btnQuestion')) $('btnQuestion').addEventListener('click', function () { applyQuestion($('questionScope') && $('questionScope').value); });
+  if ($('btnClearQuestion')) $('btnClearQuestion').addEventListener('click', clearQuestion);
+  if ($('btnDeletePast')) $('btnDeletePast').addEventListener('click', function () {
+    if (!confirm('Delete all past classes from this browser?')) return;
+    writePast([]);
+    renderPast();
+  });
+  if ($('levelSel')) $('levelSel').addEventListener('change', renderQuestionIdeas);
   $('levelSel').addEventListener('change', onLevel);
   $('lockLevel').addEventListener('change', onLevel);
   $('btnCopyLink').addEventListener('click', function () {

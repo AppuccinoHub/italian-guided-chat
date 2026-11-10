@@ -1,0 +1,85 @@
+{
+  "questions": [
+    {
+      "level": "1",
+      "q": "Come ti chiami?",
+      "starters": ["Mi chiamo…"],
+      "example": "Mi chiamo Giulia."
+    },
+    {
+      "level": "1",
+      "q": "Come stai?",
+      "starters": ["Sto bene, grazie, e…"],
+      "example": "Sto bene, grazie, e tu?"
+    },
+    {
+      "level": "1",
+      "q": "Di dove sei?",
+      "starters": ["Sono di…"],
+      "example": "Sono di Napoli."
+    },
+    {
+      "level": "2",
+      "q": "Hai fame?",
+      "starters": ["Sì, ho fame e…", "No, non ho fame, ma…"],
+      "example": "Sì, ho fame e ho sete."
+    },
+    {
+      "level": "2",
+      "q": "Hai sete?",
+      "starters": ["Sì, ho sete e…", "No, non ho sete, ma…"],
+      "example": "No, non ho sete, ma ho fame."
+    },
+    {
+      "level": "3",
+      "q": "Cosa facevi da bambino?",
+      "also": ["Cosa facevi da bambina?"],
+      "starters": ["Da bambino giocavo…", "Da bambina giocavo…", "Da piccolo andavo…", "Da piccola andavo…", "Quando ero piccolo mi piaceva…", "Quando ero piccola mi piaceva…"],
+      "example": "Da bambino giocavo a calcio. / Da bambina giocavo a calcio."
+    },
+    {
+      "level": "3",
+      "q": "Com'eri da bambino?",
+      "also": ["Com'eri da bambina?"],
+      "starters": ["Da bambino ero…", "Da bambina ero…", "Ero un bambino…", "Ero una bambina…"],
+      "example": "Da bambino ero timido. / Da bambina ero timida."
+    },
+    {
+      "level": "3",
+      "q": "Dove abitavi da piccolo?",
+      "also": ["Dove abitavi da piccola?"],
+      "starters": ["Da piccolo abitavo…", "Da piccola abitavo…", "Abitavo a…", "Con la mia famiglia abitavo…"],
+      "example": "Da piccolo abitavo a Napoli. / Da piccola abitavo a Napoli."
+    },
+    {
+      "level": "3",
+      "q": "Qual era il tuo gioco preferito?",
+      "starters": ["Il mio gioco preferito era…", "Da bambino giocavo a…", "Da bambina giocavo a…", "Mi piaceva…"],
+      "example": "Il mio gioco preferito era il calcio."
+    },
+    {
+      "level": "3",
+      "q": "Che cosa ti piaceva mangiare?",
+      "starters": ["Mi piaceva mangiare…", "Da bambino mangiavo…", "Da bambina mangiavo…", "Mi piacevano…"],
+      "example": "Mi piaceva mangiare la pizza."
+    },
+    {
+      "level": "4",
+      "q": "Che cosa ne pensi?",
+      "starters": ["Secondo me…"],
+      "example": "Secondo me è interessante."
+    },
+    {
+      "level": "4",
+      "q": "Ti piace?",
+      "starters": ["Sì, mi piace…", "No, non mi piace…"],
+      "example": "Sì, mi piace molto."
+    },
+    {
+      "level": "AP",
+      "q": "E tu che cosa ne pensi?",
+      "starters": ["Secondo me…", "Sono d'accordo perché…"],
+      "example": "Sono d'accordo perché è importante."
+    }
+  ]
+}
